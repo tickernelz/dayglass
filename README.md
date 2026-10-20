@@ -17,6 +17,7 @@ The source archives live in this repository under `sources/`, stored as masked c
 | Idle detection | Settings gains an idle-detection switch; when off, idle time is neither tracked nor reported |
 | Display sleep | While idle detection is off, the display is held awake through a `prevent-display-sleep` blocker so the machine never sleeps the screen out from under a tracked session |
 | Screenshot privacy | Settings gains a privacy control that masks every captured frame before it leaves the main process: `off`, `blur`, `mosaic`, or `text` (crisp edges, unreadable glyphs) |
+| Screenshot notice | A native notification warns that a capture is about to happen, then confirms once it was taken. Both sides are configurable in Settings: `off`, `before`, `after`, or `both`, with a warning lead time of 5, 10, 15, or 30 seconds |
 | Settings layout | The settings panel is regrouped into General, Screenshots, and Idle sections |
 
 Everything else keeps working: screenshots, activity sync, task notes, hotkeys, tray behavior, and sign-in.
@@ -101,6 +102,17 @@ The privacy mode is applied inside the main process, after the monitors are comp
 | `text` | lanczos downscale to 22% then upscale with sharpening | Edges and layout stay crisp, every glyph is destroyed |
 
 Transforms run in the existing sharp worker child process; if sharp is unavailable the capture falls back to `nativeImage` resampling, and if that also fails the screenshot is dropped instead of being uploaded unmasked. `scripts/verify.cjs` renders a text fixture, runs the worker for each mode, and asserts that detail collapses while the frame size is preserved.
+
+## Screenshot notices
+
+The tracking loop already ticks once per second, so the warning is scheduled against the same minute boundary the capture uses: once the remaining time drops to the configured lead, the main process raises a native notification through the same bridge the rest of the app uses (`notify-send` with a transient hint on Linux, `Notification` on macOS and Windows). The warning fires at most once per scheduled capture, is skipped entirely while a manager has screenshots disabled, and the confirmation is raised only when a frame actually came back.
+
+| Setting | Values | Default |
+| --- | --- | --- |
+| `screenshotNoticeMode` | `off`, `before`, `after`, `both` | `both` |
+| `screenshotNoticeLead` | `5`, `10`, `15`, `30` seconds | `10` |
+
+`scripts/verify.cjs` extracts the shipped notice code out of the built bundle and runs it against stubbed settings, employment, and notification bridge: it asserts the warning fires inside the lead window, counts down the remaining seconds, never repeats for the same minute, stays silent outside the window, under `off`/`after`, and while screenshots are disabled, honours a custom lead time, and that the confirmation skips a failed capture.
 
 ## Display sleep
 

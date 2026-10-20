@@ -112,6 +112,7 @@ const main = (appDir) => {
 
   applyMixed(dir, readJson("04-privacy-wakelock.main.json"), "privacy-wakelock", null);
   applyMixed(dir, readJson("05-privacy-wakelock.renderer.json"), "privacy-wakelock-ui", ids);
+  applyMixed(dir, readJson("06-screenshot-notice.renderer.json"), "screenshot-notice", ids);
 
   const cssFile = rendererAsset(dir, "css");
   const cssAdd = fs.readFileSync(path.join(PATCHES, "03-monitor-idle.css.txt"), "utf8");

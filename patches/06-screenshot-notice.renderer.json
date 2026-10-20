@@ -1,0 +1,68 @@
+[
+  {
+    "id": "notice-enum",
+    "file": "@renderer:js",
+    "old": "e.SCREENSHOT_PRIVACY_MODE=`screenshotPrivacyMode`,e}({}),",
+    "new": "e.SCREENSHOT_PRIVACY_MODE=`screenshotPrivacyMode`,e.SCREENSHOT_NOTICE_MODE=`screenshotNoticeMode`,e.SCREENSHOT_NOTICE_LEAD=`screenshotNoticeLead`,e}({}),"
+  },
+  {
+    "id": "notice-defaults",
+    "file": "@renderer:js",
+    "old": "[{{K}}.SCREENSHOT_PRIVACY_MODE]:`off`,displays:[]}",
+    "new": "[{{K}}.SCREENSHOT_PRIVACY_MODE]:`off`,[{{K}}.SCREENSHOT_NOTICE_MODE]:`both`,[{{K}}.SCREENSHOT_NOTICE_LEAD]:10,displays:[]}"
+  },
+  {
+    "id": "notice-setting-key",
+    "file": "@renderer:js",
+    "old": "e.ScreenshotPrivacyMode=`screenshotPrivacyMode`,",
+    "new": "e.ScreenshotPrivacyMode=`screenshotPrivacyMode`,e.ScreenshotNoticeMode=`screenshotNoticeMode`,e.ScreenshotNoticeLead=`screenshotNoticeLead`,"
+  },
+  {
+    "id": "notice-provider-destructure",
+    "file": "@renderer:js",
+    "old": "let[n,i,o,s,c,l,u,d,y,w,privacySetting]=await Promise.all([",
+    "new": "let[n,i,o,s,c,l,u,d,y,w,privacySetting,noticeSetting,leadSetting]=await Promise.all(["
+  },
+  {
+    "id": "notice-provider-load",
+    "file": "@renderer:js",
+    "old": "window.mainAPI.getDisplays(),r.getValue({{gs}}.ScreenshotPrivacyMode)]);",
+    "new": "window.mainAPI.getDisplays(),r.getValue({{gs}}.ScreenshotPrivacyMode),r.getValue({{gs}}.ScreenshotNoticeMode),r.getValue({{gs}}.ScreenshotNoticeLead)]);"
+  },
+  {
+    "id": "notice-provider-value",
+    "file": "@renderer:js",
+    "old": "[{{K}}.SCREENSHOT_PRIVACY_MODE]:privacySetting??{{Po}}[{{K}}.SCREENSHOT_PRIVACY_MODE],displays:",
+    "new": "[{{K}}.SCREENSHOT_PRIVACY_MODE]:privacySetting??{{Po}}[{{K}}.SCREENSHOT_PRIVACY_MODE],[{{K}}.SCREENSHOT_NOTICE_MODE]:noticeSetting??{{Po}}[{{K}}.SCREENSHOT_NOTICE_MODE],[{{K}}.SCREENSHOT_NOTICE_LEAD]:Number(leadSetting)||{{Po}}[{{K}}.SCREENSHOT_NOTICE_LEAD],displays:"
+  },
+  {
+    "id": "notice-update-setting",
+    "file": "@renderer:js",
+    "old": "else if(e==={{K}}.SCREENSHOT_PRIVACY_MODE)await r.setValue({{gs}}.ScreenshotPrivacyMode,i);",
+    "new": "else if(e==={{K}}.SCREENSHOT_PRIVACY_MODE)await r.setValue({{gs}}.ScreenshotPrivacyMode,i);else if(e==={{K}}.SCREENSHOT_NOTICE_MODE)await r.setValue({{gs}}.ScreenshotNoticeMode,i);else if(e==={{K}}.SCREENSHOT_NOTICE_LEAD)await r.setValue({{gs}}.ScreenshotNoticeLead,i);"
+  },
+  {
+    "id": "notice-ui-destructure",
+    "file": "@renderer:js",
+    "old": "screenshotPrivacyMode:privMode,displays:L=[]}=e,",
+    "new": "screenshotPrivacyMode:privMode,screenshotNoticeMode:noticeMode,screenshotNoticeLead:noticeLead,displays:L=[]}=e,"
+  },
+  {
+    "id": "notice-ui-control",
+    "file": "@renderer:js",
+    "old": "{section:`Idle`},",
+    "new": "{render:()=>{let modes=[`off`,`before`,`after`,`both`],labels={off:`Off`,before:`Before`,after:`After`,both:`Before and after`},leads=[5,10,15,30],current=noticeMode||`both`,lead=Number(noticeLead)||10,notes={off:`No screenshot notification is shown.`,before:`A native notification appears ${lead} seconds before each capture.`,after:`A native notification appears right after each capture.`,both:`A native notification appears ${lead} seconds before each capture and again after it.`};return(0,W.jsxs)(`div`,{className:{{No}}.scope,children:[(0,W.jsxs)(`div`,{className:{{No}}.scopeHead,children:[(0,W.jsx)(`span`,{className:{{No}}.scopeTitle,children:`Screenshot notification`}),(0,W.jsx)(`span`,{className:{{No}}.scopeValue,children:labels[current]})]}),(0,W.jsx)(`div`,{className:{{No}}.segmented,role:`radiogroup`,\"aria-label\":`Screenshot notification mode`,children:modes.map(e=>(0,W.jsx)(`button`,{type:`button`,role:`radio`,\"aria-checked\":current===e,className:{{va}}({{No}}.segment,{[{{No}}.segmentActive]:current===e}),onClick:()=>t({{K}}.SCREENSHOT_NOTICE_MODE,e),children:labels[e]},e))}),(0,W.jsx)(`div`,{className:{{No}}.scopeNote,children:notes[current]}),current===`off`?null:(0,W.jsxs)(`div`,{children:[(0,W.jsx)(`div`,{className:{{No}}.scopeHead,children:(0,W.jsx)(`span`,{className:{{No}}.scopeTitle,children:`Warning lead time`})}),(0,W.jsx)(`div`,{className:{{No}}.segmented,role:`radiogroup`,\"aria-label\":`Screenshot warning lead time`,children:leads.map(e=>(0,W.jsx)(`button`,{type:`button`,role:`radio`,\"aria-checked\":lead===e,className:{{va}}({{No}}.segment,{[{{No}}.segmentActive]:lead===e}),onClick:()=>t({{K}}.SCREENSHOT_NOTICE_LEAD,e),children:`${e}s`},e))})]})]})}},{section:`Idle`},"
+  },
+  {
+    "id": "notice-loop-pre",
+    "file": "@renderer:js",
+    "old": "{{shotMinute}}<={{shotDuration}}){E.default.info(`Taking screenshot - screenshotDuration:`,",
+    "new": "{{shotMinute}}<={{shotDuration}}){let noticeMode=await this.rootContext.varsRepository.getValue({{gs}}.ScreenshotNoticeMode)||`both`,noticeLead=Number(await this.rootContext.varsRepository.getValue({{gs}}.ScreenshotNoticeLead))||10,noticeBefore=noticeMode===`before`||noticeMode===`both`,noticeAfter=noticeMode===`after`||noticeMode===`both`,noticeDue=t.fromTime+{{shotMinute}}*6e4-Date.now();noticeBefore&&noticeDue>0&&noticeDue<=noticeLead*1e3&&this.noticeMinute!=={{shotMinute}}&&(this.noticeMinute={{shotMinute}},(await this.rootContext.employmentRepository.getEmployment(t.employmentId))?.disableScreenshots||window.mainAPI.showSystemNotification({title:`Screenshot in ${Math.max(1,Math.round(noticeDue/1e3))}s`,message:`A screenshot of your screen will be taken shortly.`}).catch(()=>{}));E.default.info(`Taking screenshot - screenshotDuration:`,"
+  },
+  {
+    "id": "notice-loop-post",
+    "file": "@renderer:js",
+    "old": "&&this.dispatchEvent(new CustomEvent({{shotEvent}}.ScreenshotTaken,{detail:{activity:t}}));",
+    "new": "&&this.dispatchEvent(new CustomEvent({{shotEvent}}.ScreenshotTaken,{detail:{activity:t}}));noticeAfter&&a?.imageData?.buffer?.length&&window.mainAPI.showSystemNotification({title:`Screenshot taken`,message:`A screenshot of your screen was captured.`}).catch(()=>{});"
+  }
+]

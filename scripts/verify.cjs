@@ -76,6 +76,14 @@ const staticChecks = [
   ["privacy setting default", jsSrc.includes("SCREENSHOT_PRIVACY_MODE]:`off`")],
   ["privacy ui control", jsSrc.includes("Screenshot privacy mode")],
   ["privacy ui labels fit four modes", jsSrc.includes("labels={off:`Off`,blur:`Blur`,mosaic:`Mosaic`,text:`Text`}")],
+  ["notice setting default", jsSrc.includes("SCREENSHOT_NOTICE_MODE]:`both`")],
+  ["notice lead default", jsSrc.includes("SCREENSHOT_NOTICE_LEAD]:10")],
+  ["notice setting persisted", /setValue\([A-Za-z_$][\w$]*\.ScreenshotNoticeMode/.test(jsSrc)],
+  ["notice lead persisted", /setValue\([A-Za-z_$][\w$]*\.ScreenshotNoticeLead/.test(jsSrc)],
+  ["notice ui mode control", jsSrc.includes("Screenshot notification mode")],
+  ["notice ui lead control", jsSrc.includes("Screenshot warning lead time")],
+  ["notice uses the native notification bridge", jsSrc.includes("showSystemNotification({title:`Screenshot in")],
+  ["taken notice uses the native notification bridge", jsSrc.includes("showSystemNotification({title:`Screenshot taken`")],
   ["settings rows reuse component variable", !/\{\{rows\}\}=\[/.test(jsSrc) || jsSrc.includes("h.filter(e=>e.isVisible!==!1)")],
   ["privacy capture argument", jsSrc.includes("privacy:await this.rootContext.varsRepository.getValue")],
   ["wake lock follows setting toggle", jsSrc.includes("setDisplayWakeLock(i===!1)")],
@@ -179,6 +187,121 @@ const pixelChecks = async () => {
   ];
 };
 
+const noticePersistenceChecks = () => {
+  const marker = ".SCREENSHOT_NOTICE_MODE)await r.setValue(";
+  const at = jsSrc.indexOf(marker);
+  if (at < 0) {
+    console.log("  notice setter snippet not found in the bundle");
+    return [["notice setter snippet present", false]];
+  }
+  const from = jsSrc.lastIndexOf("else if(e===", at);
+  const to = jsSrc.indexOf(".ScreenshotNoticeLead,i);", at) + ".ScreenshotNoticeLead,i);".length;
+  const snippet = jsSrc.slice(from, to);
+  const kName = /^else if\(e===([A-Za-z_$][\w$]*)\.SCREENSHOT_NOTICE_MODE/.exec(snippet);
+  const gsName = /r\.setValue\(([A-Za-z_$][\w$]*)\.ScreenshotNoticeMode/.exec(snippet);
+  if (!kName || !gsName) {
+    console.log("  notice setter snippet could not be resolved: " + snippet.slice(0, 80));
+    return [["notice setter snippet resolvable", false]];
+  }
+  const fn = new Function("e", "i", kName[1], gsName[1], "r", "return (async () => { if (false) {} " + snippet + " })()");
+
+  const runSetter = async (key, value) => {
+    const writes = [];
+    const r = { setValue: async (k, v) => { writes.push([k, v]); } };
+    const K = { SCREENSHOT_NOTICE_MODE: "modeKey", SCREENSHOT_NOTICE_LEAD: "leadKey" };
+    const gs = { ScreenshotNoticeMode: "screenshotNoticeMode", ScreenshotNoticeLead: "screenshotNoticeLead" };
+    await fn(key, value, K, gs, r);
+    return writes;
+  };
+
+  return (async () => {
+    const modeWrites = await runSetter("modeKey", "before");
+    const leadWrites = await runSetter("leadKey", 15);
+    const otherWrites = await runSetter("someOtherKey", true);
+    return [
+      ["notice mode is written to storage", modeWrites.length === 1 && modeWrites[0][0] === "screenshotNoticeMode" && modeWrites[0][1] === "before"],
+      ["notice lead is written to storage", leadWrites.length === 1 && leadWrites[0][0] === "screenshotNoticeLead" && leadWrites[0][1] === 15],
+      ["notice setter ignores unrelated settings", otherWrites.length === 0],
+    ];
+  })();
+};
+
+const noticeChecks = () => {
+  const gsMatch = /getValue\(([A-Za-z_$][\w$]*)\.HideFromTaskBar\)/.exec(jsSrc);
+  const start = jsSrc.indexOf("noticeMode=await");
+  const end = jsSrc.indexOf("}).catch(()=>{}));", start);
+  if (!gsMatch || start < 0 || end < 0) {
+    console.log("  notice snippet not found in the bundle");
+    return [["notice harness snippet present", false]];
+  }
+  const gs = gsMatch[1];
+  const snippet = jsSrc.slice(start, end + "}).catch(()=>{}));".length);
+  const body = "return (async () => { let " + snippet + " return true; })()";
+  const harness = new Function(gs, "window", "t", "n", body);
+
+  const run = async (opts) => {
+    const calls = [];
+    const stub = {
+      rootContext: {
+        varsRepository: {
+          getValue: async (key) => (key === "mode" ? opts.mode : opts.lead),
+        },
+        employmentRepository: {
+          getEmployment: async () => ({ disableScreenshots: !!opts.disabled }),
+        },
+      },
+      noticeMinute: undefined,
+    };
+    const win = {
+      mainAPI: {
+        showSystemNotification: (payload) => {
+          calls.push(payload);
+          return Promise.resolve(true);
+        },
+      },
+    };
+    const activity = { fromTime: Date.now() - 60000 + opts.dueMs, employmentId: "e" };
+    const keys = { ScreenshotNoticeMode: "mode", ScreenshotNoticeLead: "lead" };
+    await harness.call(stub, keys, win, activity, 1);
+    return { calls, stub, win, keys, activity };
+  };
+
+  const post = jsSrc.slice(jsSrc.indexOf("noticeAfter&&a?.imageData"), jsSrc.indexOf("let o=this.getRandomInterval(i);", jsSrc.indexOf("noticeAfter&&a?.imageData")));
+  const postHarness = new Function("noticeAfter", "a", "window", post);
+
+  const runPost = (noticeAfter, hasImage) => {
+    const calls = [];
+    const win = { mainAPI: { showSystemNotification: (payload) => { calls.push(payload); return Promise.resolve(true); } } };
+    const shot = hasImage ? { imageData: { buffer: { length: 1024 } } } : { imageData: null };
+    postHarness(noticeAfter, shot, win);
+    return calls;
+  };
+
+  return (async () => {
+    const checks = [];
+    const full = await run({ mode: "both", lead: 10, dueMs: 10000, disabled: false });
+    checks.push(["notice fires inside the lead window", full.calls.length === 1]);
+    checks.push(["notice counts down the remaining seconds", /Screenshot in 10s/.test(full.calls[0]?.title || "")]);
+
+    await harness.call(full.stub, full.keys, full.win, full.activity, 1);
+    checks.push(["notice does not repeat for the same minute", full.calls.length === 1]);
+
+    checks.push(["notice stays silent before the window", (await run({ mode: "both", lead: 10, dueMs: 30000, disabled: false })).calls.length === 0]);
+    checks.push(["notice stays silent once the capture is already due", (await run({ mode: "both", lead: 10, dueMs: -2000, disabled: false })).calls.length === 0]);
+    checks.push(["notice stays silent when the mode is off", (await run({ mode: "off", lead: 10, dueMs: 10000, disabled: false })).calls.length === 0]);
+    checks.push(["notice stays silent for after-only", (await run({ mode: "after", lead: 10, dueMs: 10000, disabled: false })).calls.length === 0]);
+    checks.push(["notice stays silent when screenshots are disabled", (await run({ mode: "both", lead: 10, dueMs: 10000, disabled: true })).calls.length === 0]);
+    checks.push(["notice honours a custom lead time", (await run({ mode: "both", lead: 30, dueMs: 25000, disabled: false })).calls.length === 1]);
+    checks.push(["notice honours a short lead time", (await run({ mode: "before", lead: 5, dueMs: 4000, disabled: false })).calls.length === 1]);
+
+    const taken = runPost(true, true);
+    checks.push(["taken notice fires after a capture", taken.length === 1 && /Screenshot taken/.test(taken[0]?.title || "")]);
+    checks.push(["taken notice skips a failed capture", runPost(true, false).length === 0]);
+    checks.push(["taken notice stays silent for before-only", runPost(false, true).length === 0]);
+    return checks;
+  })();
+};
+
 const wakeLockChecks = () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "wakelock-verify-"));
   try {
@@ -244,6 +367,18 @@ const run = async () => {
   } catch (error) {
     console.log("FAIL privacy pixel checks: " + error.message);
     checks.push(["privacy pixel checks executed", false]);
+  }
+  try {
+    checks.push(...(await noticePersistenceChecks()));
+  } catch (error) {
+    console.log("FAIL notice persistence harness: " + error.message);
+    checks.push(["notice persistence harness executed", false]);
+  }
+  try {
+    checks.push(...(await noticeChecks()));
+  } catch (error) {
+    console.log("FAIL notice harness: " + error.message);
+    checks.push(["notice harness executed", false]);
   }
   try {
     checks.push(...wakeLockChecks());

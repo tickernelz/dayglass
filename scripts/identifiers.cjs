@@ -12,6 +12,10 @@ const PATTERNS = {
   va: /([A-Za-z_$][\w$]*)\(([A-Za-z_$][\w$]*)\.settingGroup,\{\[\2\.disabled\]:!!e\.disabled\}\)/,
   vis: /checked:i,onChange:m,isVisible:(![01])\}\];/,
   sleeps: /,await ([A-Za-z_$][\w$]*)\(2e3\)\}\}\}/,
+  shotMinute: /([A-Za-z_$][\w$]*)<=[A-Za-z_$][\w$]*\)\{E\.default\.info\(`Taking screenshot/,
+  shotDuration: /[A-Za-z_$][\w$]*<=([A-Za-z_$][\w$]*)\)\{E\.default\.info\(`Taking screenshot/,
+  shotEvent: /new CustomEvent\(([A-Za-z_$][\w$]*)\.ScreenshotTaken,/,
+
   tray: /\{label:`((?:Minimize button minimizes|Hide) [\w.]+ (?:to tray|from dock))`,checked:i,onChange:m,/,
   APP: /\{label:`Launch ([\w.]+) on system startup`/,
 };
