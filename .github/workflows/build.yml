@@ -1,0 +1,80 @@
+name: build
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+  pull_request:
+    paths:
+      - "patches/**"
+      - "scripts/**"
+      - "config/**"
+      - ".github/workflows/build.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x64
+            os: ubuntu-24.04
+            artifact: dayglass_*_amd64.deb
+          - target: linux-arm64
+            os: ubuntu-24.04-arm
+            artifact: dayglass_*_arm64.deb
+          - target: mac-x64
+            os: macos-13
+            artifact: dayglass-*-mac-x64.zip
+          - target: mac-arm64
+            os: macos-14
+            artifact: dayglass-*-mac-arm64.zip
+          - target: win-x64
+            os: windows-2022
+            artifact: dayglass-*-win-x64.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Install packaging tools (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ar tar xz-utils zip unzip
+
+      - name: Install NSIS (Linux)
+        if: runner.os == 'Linux' && matrix.target == 'win-x64'
+        run: sudo apt-get install -y nsis wine64
+
+      - name: Build
+        run: node scripts/build.cjs ${{ matrix.target }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: dist/${{ matrix.artifact }}
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true

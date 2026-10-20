@@ -1,0 +1,52 @@
+[
+  {
+    "id": "kenum",
+    "old": "e.ONLY_PRIMARY_SCREEN=`onlyPrimaryScreen`,e}({}),{{Po}}={",
+    "new": "e.ONLY_PRIMARY_SCREEN=`onlyPrimaryScreen`,e.SELECTED_DISPLAYS=`selectedDisplays`,e.IDLE_DETECTION_ENABLED=`idleDetectionEnabled`,e}({}),{{Po}}={"
+  },
+  {
+    "id": "defaults",
+    "old": "[{{K}}.ONLY_PRIMARY_SCREEN]:!1},{{Fo}}={",
+    "new": "[{{K}}.ONLY_PRIMARY_SCREEN]:!1,[{{K}}.SELECTED_DISPLAYS]:[],[{{K}}.IDLE_DETECTION_ENABLED]:!0,displays:[]},{{Fo}}={"
+  },
+  {
+    "id": "gsenum",
+    "old": "e.OnlyPrimaryScreen=`onlyPrimaryScreen`,e.IsAutoStartEnabled=",
+    "new": "e.OnlyPrimaryScreen=`onlyPrimaryScreen`,e.SelectedDisplays=`selectedDisplays`,e.IdleDetectionEnabled=`idleDetectionEnabled`,e.IsAutoStartEnabled="
+  },
+  {
+    "id": "provider-load",
+    "old": "let[n,i,o,s,c,l,u]=await Promise.all([t.getHotKeys(),window.mainAPI.getAutoLaunch(),r.getValue({{gs}}.HideFromTaskBar),r.getValue({{gs}}.IsAutoStartEnabled),r.getValue({{gs}}.ShowIdleModal),r.getValue({{gs}}.ShowScreenshotNotifications),r.getValue(`${{{gs}}.OnlyPrimaryScreen}:${e}`)]);a({[{{K}}.HOTKEYS]:n,[{{K}}.IS_AUTO_LAUNCH_ENABLED]:i,[{{K}}.HIDE_FROM_TASK_BAR]:o??{{Po}}[{{K}}.HIDE_FROM_TASK_BAR],[{{K}}.IS_AUTO_START_ENABLED]:s??{{Po}}[{{K}}.IS_AUTO_START_ENABLED],[{{K}}.SHOW_SCREENSHOT_NOTIFICATIONS]:l??{{Po}}[{{K}}.SHOW_SCREENSHOT_NOTIFICATIONS],[{{K}}.SHOW_IDLE_MODAL]:c??{{Po}}[{{K}}.SHOW_IDLE_MODAL],[{{K}}.ONLY_PRIMARY_SCREEN]:u??{{Po}}[{{K}}.ONLY_PRIMARY_SCREEN]})",
+    "new": "let[n,i,o,s,c,l,u,d,y,w]=await Promise.all([t.getHotKeys(),window.mainAPI.getAutoLaunch(),r.getValue({{gs}}.HideFromTaskBar),r.getValue({{gs}}.IsAutoStartEnabled),r.getValue({{gs}}.ShowIdleModal),r.getValue({{gs}}.ShowScreenshotNotifications),r.getValue(`${{{gs}}.OnlyPrimaryScreen}:${e}`),r.getValue({{gs}}.IdleDetectionEnabled),r.getValue(`${{{gs}}.SelectedDisplays}:${e}`),window.mainAPI.getDisplays()]);a({[{{K}}.HOTKEYS]:n,[{{K}}.IS_AUTO_LAUNCH_ENABLED]:i,[{{K}}.HIDE_FROM_TASK_BAR]:o??{{Po}}[{{K}}.HIDE_FROM_TASK_BAR],[{{K}}.IS_AUTO_START_ENABLED]:s??{{Po}}[{{K}}.IS_AUTO_START_ENABLED],[{{K}}.SHOW_SCREENSHOT_NOTIFICATIONS]:l??{{Po}}[{{K}}.SHOW_SCREENSHOT_NOTIFICATIONS],[{{K}}.SHOW_IDLE_MODAL]:c??{{Po}}[{{K}}.SHOW_IDLE_MODAL],[{{K}}.ONLY_PRIMARY_SCREEN]:u??{{Po}}[{{K}}.ONLY_PRIMARY_SCREEN],[{{K}}.SELECTED_DISPLAYS]:Array.isArray(y)?y:{{Po}}[{{K}}.SELECTED_DISPLAYS],[{{K}}.IDLE_DETECTION_ENABLED]:d??{{Po}}[{{K}}.IDLE_DETECTION_ENABLED],displays:Array.isArray(w)?w:[]})"
+  },
+  {
+    "id": "update-setting",
+    "old": "else if(e==={{K}}.ONLY_PRIMARY_SCREEN){let e=n.currentAccount?.accountId;e&&await r.setValue(`${{{gs}}.OnlyPrimaryScreen}:${e}`,i)}else e==={{K}}.IS_AUTO_START_ENABLED?",
+    "new": "else if(e==={{K}}.ONLY_PRIMARY_SCREEN){let e=n.currentAccount?.accountId;e&&await r.setValue(`${{{gs}}.OnlyPrimaryScreen}:${e}`,i)}else if(e==={{K}}.SELECTED_DISPLAYS){let e=n.currentAccount?.accountId;e&&await r.setValue(`${{{gs}}.SelectedDisplays}:${e}`,i)}else if(e==={{K}}.IDLE_DETECTION_ENABLED)await r.setValue({{gs}}.IdleDetectionEnabled,i);else e==={{K}}.IS_AUTO_START_ENABLED?"
+  },
+  {
+    "id": "ui-destructure",
+    "old": "showIdleModal:s,onlyPrimaryScreen:c}=e,",
+    "new": "showIdleModal:s,onlyPrimaryScreen:c,selectedDisplays:S,idleDetectionEnabled:I,displays:L=[]}=e,"
+  },
+  {
+    "id": "ui-rows",
+    "old": "{label:`Screenshot primary monitor only`,checked:c,onChange:e=>t({{K}}.ONLY_PRIMARY_SCREEN,e)},{label:`Show idle time notifications`,checked:s,onChange:e=>t({{K}}.SHOW_IDLE_MODAL,e)},",
+    "new": "{label:`Screenshot primary monitor only`,checked:c,onChange:e=>t({{K}}.ONLY_PRIMARY_SCREEN,e)},{label:`Capture all monitors`,checked:S.length===0,onChange:e=>t({{K}}.SELECTED_DISPLAYS,[]),isVisible:L.length>1},...L.map(e=>({label:`Monitor: ${e.label}${e.primary?` (primary)`:``} — ${e.pixelsWide}x${e.pixelsHigh}`,checked:S.length===0||S.includes(e.id),onChange:n=>{let r=S.length>0?[...S]:L.map(e=>e.id),i=n?[...new Set([...r,e.id])]:r.filter(t=>t!==e.id);t({{K}}.SELECTED_DISPLAYS,i.length===0||i.length===L.length?[]:i)},isVisible:L.length>1})),{label:`Idle detection`,checked:I,onChange:e=>t({{K}}.IDLE_DETECTION_ENABLED,e)},{label:`Show idle time notifications`,checked:s,onChange:e=>t({{K}}.SHOW_IDLE_MODAL,e),disabled:!I,disabledTooltip:`Idle detection is disabled`},"
+  },
+  {
+    "id": "idle-loop",
+    "old": "{{Il}}=class extends EventTarget{minutes=0;constructor(e){super(),this.rootContext=e,this.runLoop().catch(e=>{E.default.error(`User inactivity loop failed:`,e)})}runLoop=async()=>{let e=!1;for(;;){let t=this.minutes*60,n=await window.mainAPI.getUserInactiveTime();this.rootContext.activityLevelProvider.updateInactiveTime(n*1e3),t>0&&n>t?",
+    "new": "{{Il}}=class extends EventTarget{minutes=0;idleEnabled=!0;constructor(e){super(),this.rootContext=e,this.runLoop().catch(e=>{E.default.error(`User inactivity loop failed:`,e)})}runLoop=async()=>{let e=!1;for(;;){this.idleEnabled=(await this.rootContext.varsRepository.getValue({{gs}}.IdleDetectionEnabled))!==!1;let t=this.minutes*60,n=await window.mainAPI.getUserInactiveTime();this.rootContext.activityLevelProvider.updateInactiveTime(this.idleEnabled?n*1e3:0),this.idleEnabled&&t>0&&n>t?"
+  },
+  {
+    "id": "idle-activity",
+    "old": "async addIdleActivity(e,t){if(!this.currentEmployment||!this.currentActivity||await this.rootContext.varsRepository.getValue({{gs}}.ShowIdleModal)===!1)return;",
+    "new": "async addIdleActivity(e,t){if(!this.currentEmployment||!this.currentActivity||await this.rootContext.varsRepository.getValue({{gs}}.ShowIdleModal)===!1||await this.rootContext.varsRepository.getValue({{gs}}.IdleDetectionEnabled)===!1)return;"
+  },
+  {
+    "id": "capture-call",
+    "old": "let e=await this.rootContext.varsRepository.getValue(`${{{gs}}.OnlyPrimaryScreen}:${i}`)??!1,t=this.rootContext.screenCapture.takeScreenshot(e),",
+    "new": "let e=await this.rootContext.varsRepository.getValue(`${{{gs}}.OnlyPrimaryScreen}:${i}`)??!1,Sd=await this.rootContext.varsRepository.getValue(`${{{gs}}.SelectedDisplays}:${i}`),t=this.rootContext.screenCapture.takeScreenshot({onlyPrimaryScreen:e,displayIds:Array.isArray(Sd)?Sd:[]}),"
+  }
+]

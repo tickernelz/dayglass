@@ -1,0 +1,26 @@
+[
+  {
+    "id": "check-cheat-return-empty",
+    "file": "dist-main/main/utils/checkCheatSoftware.js",
+    "old": "export const checkCheatSoftware = async (keywords) => {\n    const processes = (await systeminformation.processes()).list;",
+    "new": "export const checkCheatSoftware = async (keywords) => {\n    return [];\n    const processes = (await systeminformation.processes()).list;"
+  },
+  {
+    "id": "ipc-cheat-return-empty",
+    "file": "dist-main/main/registerIPCHandlers.js",
+    "old": "    ipcMainHandle(\"checkCheatSoftware\", (keywords) => {\n        return checkCheatSoftware(keywords);\n    });",
+    "new": "    ipcMainHandle(\"checkCheatSoftware\", () => {\n        return [];\n    });"
+  },
+  {
+    "id": "updates-setup-noop",
+    "file": "dist-main/main/updates.js",
+    "old": "export const setupUpdates = (window) => {\n    autoUpdater.logger = log;",
+    "new": "export const setupUpdates = (window) => {\n    return;\n    autoUpdater.logger = log;"
+  },
+  {
+    "id": "updates-install-noop",
+    "file": "dist-main/main/updates.js",
+    "old": "export const installUpdate = () => {\n    setImmediate(() => {",
+    "new": "export const installUpdate = () => {\n    return;\n    setImmediate(() => {"
+  }
+]

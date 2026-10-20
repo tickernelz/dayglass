@@ -1,0 +1,9 @@
+[
+  {
+    "id": "cheat-checker-noop",
+    "start": "async check(){",
+    "endRegex": "\\}\\},\\s*(?=[A-Za-z_$][\\w$]*=class\\{get cheatSoftwareTable)",
+    "expect": ["checkCheatSoftware(this.keyWords)", "cheatApplicationIsRun"],
+    "new": "async check(){return}async sendData(){return}},"
+  }
+]
