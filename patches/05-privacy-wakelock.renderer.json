@@ -1,0 +1,74 @@
+[
+  {
+    "id": "privacy-enum",
+    "file": "@renderer:js",
+    "old": "e.IDLE_DETECTION_ENABLED=`idleDetectionEnabled`,e}({}),",
+    "new": "e.IDLE_DETECTION_ENABLED=`idleDetectionEnabled`,e.SCREENSHOT_PRIVACY_MODE=`screenshotPrivacyMode`,e}({}),"
+  },
+  {
+    "id": "privacy-default",
+    "file": "@renderer:js",
+    "old": "[{{K}}.IDLE_DETECTION_ENABLED]:!0,displays:[]}",
+    "new": "[{{K}}.IDLE_DETECTION_ENABLED]:!0,[{{K}}.SCREENSHOT_PRIVACY_MODE]:`off`,displays:[]}"
+  },
+  {
+    "id": "privacy-setting-key",
+    "file": "@renderer:js",
+    "old": "e.IdleDetectionEnabled=`idleDetectionEnabled`,e.IsAutoStartEnabled=",
+    "new": "e.IdleDetectionEnabled=`idleDetectionEnabled`,e.ScreenshotPrivacyMode=`screenshotPrivacyMode`,e.IsAutoStartEnabled="
+  },
+  {
+    "id": "privacy-provider-destructure",
+    "file": "@renderer:js",
+    "old": "let[n,i,o,s,c,l,u,d,y,w]=await Promise.all([",
+    "new": "let[n,i,o,s,c,l,u,d,y,w,privacySetting]=await Promise.all(["
+  },
+  {
+    "id": "privacy-provider-load",
+    "file": "@renderer:js",
+    "old": "window.mainAPI.getDisplays()]);a({",
+    "new": "window.mainAPI.getDisplays(),r.getValue({{gs}}.ScreenshotPrivacyMode)]);window.mainAPI.setDisplayWakeLock((d??!0)===!1).catch(()=>{});a({"
+  },
+  {
+    "id": "privacy-provider-value",
+    "file": "@renderer:js",
+    "old": "[{{K}}.IDLE_DETECTION_ENABLED]:d??{{Po}}[{{K}}.IDLE_DETECTION_ENABLED],displays:Array.isArray(w)?w:[]})",
+    "new": "[{{K}}.IDLE_DETECTION_ENABLED]:d??{{Po}}[{{K}}.IDLE_DETECTION_ENABLED],[{{K}}.SCREENSHOT_PRIVACY_MODE]:privacySetting??{{Po}}[{{K}}.SCREENSHOT_PRIVACY_MODE],displays:Array.isArray(w)?w:[]})"
+  },
+  {
+    "id": "privacy-update-setting",
+    "file": "@renderer:js",
+    "old": "else if(e==={{K}}.IDLE_DETECTION_ENABLED)await r.setValue({{gs}}.IdleDetectionEnabled,i);",
+    "new": "else if(e==={{K}}.IDLE_DETECTION_ENABLED){await r.setValue({{gs}}.IdleDetectionEnabled,i),await window.mainAPI.setDisplayWakeLock(i===!1)}else if(e==={{K}}.SCREENSHOT_PRIVACY_MODE)await r.setValue({{gs}}.ScreenshotPrivacyMode,i);"
+  },
+  {
+    "id": "privacy-ui-destructure",
+    "file": "@renderer:js",
+    "old": "selectedDisplays:S,idleDetectionEnabled:I,displays:L=[]}=e,",
+    "new": "selectedDisplays:S,idleDetectionEnabled:I,screenshotPrivacyMode:privMode,displays:L=[]}=e,"
+  },
+  {
+    "id": "privacy-ui-control",
+    "file": "@renderer:js",
+    "old": "}},{section:`Idle`},",
+    "new": "}},{render:()=>{let modes=[`off`,`blur`,`mosaic`,`text`],labels={off:`Off`,blur:`Blur`,mosaic:`Mosaic`,text:`Text`},notes={off:`Screenshots are captured exactly as the screen shows them.`,blur:`The captured frame is blurred until nothing on it can be read.`,mosaic:`The captured frame is reduced to coarse blocks.`,text:`The frame keeps its shape and edges while every glyph on it is destroyed.`},current=privMode||`off`;return(0,W.jsxs)(`div`,{className:{{No}}.scope,children:[(0,W.jsxs)(`div`,{className:{{No}}.scopeHead,children:[(0,W.jsx)(`span`,{className:{{No}}.scopeTitle,children:`Screenshot privacy`}),(0,W.jsx)(`span`,{className:{{No}}.scopeValue,children:labels[current]})]}),(0,W.jsx)(`div`,{className:{{No}}.segmented,role:`radiogroup`,\"aria-label\":`Screenshot privacy mode`,children:modes.map(e=>(0,W.jsx)(`button`,{type:`button`,role:`radio`,\"aria-checked\":current===e,className:{{va}}({{No}}.segment,{[{{No}}.segmentActive]:current===e}),onClick:()=>t({{K}}.SCREENSHOT_PRIVACY_MODE,e),children:labels[e]},e))}),(0,W.jsx)(`div`,{className:{{No}}.scopeNote,children:notes[current]})]})}},{section:`Idle`},"
+  },
+  {
+    "id": "privacy-capture-call",
+    "file": "@renderer:js",
+    "old": "takeScreenshot({onlyPrimaryScreen:e,displayIds:Array.isArray(Sd)?Sd:[]})",
+    "new": "takeScreenshot({onlyPrimaryScreen:e,displayIds:Array.isArray(Sd)?Sd:[],privacy:await this.rootContext.varsRepository.getValue({{gs}}.ScreenshotPrivacyMode)||`off`})"
+  },
+  {
+    "id": "idle-loop-guard-open",
+    "file": "@renderer:js",
+    "old": "runLoop=async()=>{let e=!1;for(;;){this.idleEnabled=",
+    "new": "runLoop=async()=>{let e=!1;for(;;){try{this.idleEnabled="
+  },
+  {
+    "id": "idle-loop-guard-close",
+    "file": "@renderer:js",
+    "old": ",await {{sleeps}}(2e3)}}}",
+    "new": "}catch(t){E.default.warn(`User inactivity loop iteration failed:`,t)}await {{sleeps}}(2e3)}}}"
+  }
+]

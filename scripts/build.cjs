@@ -134,7 +134,7 @@ const repackDeb = (target, out, name) => {
   run("tar", ["-cJf", path.join(out, "data.tar.xz"), "-C", out, "data"]);
   const debianBinary = path.join(out, "debian-binary");
   if (!fs.existsSync(debianBinary)) fs.writeFileSync(debianBinary, "2.0\n");
-  const finalName = name + "_" + CFG.version + "_" + target.arch + ".deb";
+  const finalName = name + "_" + CFG.buildVersion + "_" + target.arch + ".deb";
   const finalPath = path.join(DIST, finalName);
   rm(finalPath);
   run("ar", ["rc", finalPath, debianBinary, path.join(out, "control.tar.xz"), path.join(out, "data.tar.xz")]);
@@ -146,7 +146,7 @@ const repackZip = (target, out, name) => {
   const renamed = path.join(out, name + ".app");
   rm(renamed);
   fs.renameSync(bundle, renamed);
-  const finalName = name + "-" + CFG.version + "-mac-" + target.arch + ".zip";
+  const finalName = name + "-" + CFG.buildVersion + "-mac-" + target.arch + ".zip";
   const finalPath = path.join(DIST, finalName);
   rm(finalPath);
   run(sevenZip(), ["a", "-tzip", "-mm=Deflate", "-mx=9", finalPath, name + ".app", "-xr!*.DS_Store"], { cwd: out });
@@ -168,7 +168,7 @@ const repackNsis = (target, out, name) => {
       {
         name: name,
         productName: name,
-        version: CFG.version,
+        version: CFG.buildVersion,
         description: name + " time tracking client (patched build)",
         author: "dayglass build <noreply@example.invalid>",
         main: "dist-main/main/main.js",
@@ -188,7 +188,7 @@ const repackNsis = (target, out, name) => {
         win: {
           target: [{ target: "nsis", arch: [target.arch] }],
           signAndEditExecutable: false,
-          artifactName: name + "-" + CFG.version + "-win-" + target.arch + ".exe",
+          artifactName: name + "-" + CFG.buildVersion + "-win-" + target.arch + ".exe",
         },
         nsis: {
           oneClick: false,

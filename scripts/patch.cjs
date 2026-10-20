@@ -44,6 +44,44 @@ const applySliced = (target, patches, label) => {
   fs.writeFileSync(target, s);
 };
 
+const applyWrite = (target, patches, label) => {
+  for (const p of patches) {
+    const body = fs.readFileSync(path.join(PATCHES, p.from), "utf8");
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, body);
+    console.log("  ok " + label + " " + p.id);
+  }
+};
+
+const resolveEntries = (entries, ids) =>
+  entries.map((p) =>
+    ids && p.old !== undefined
+      ? { ...p, old: substitute(p.old, ids), new: substitute(p.new, ids) }
+      : p
+  );
+
+const resolveTarget = (dir, rel) => {
+  const m = /^@renderer:(js|css)$/.exec(rel);
+  if (m) return rendererAsset(dir, m[1]);
+  return path.join(dir, rel);
+};
+
+const applyMixed = (dir, entries, label, ids) => {
+  const grouped = {};
+  for (const p of entries) (grouped[p.file] ||= []).push(p);
+  for (const [rel, list] of Object.entries(grouped)) {
+    const target = resolveTarget(dir, rel);
+    const resolved = resolveEntries(list, ids);
+    const name = path.basename(rel);
+    const writes = resolved.filter((p) => p.mode === "write");
+    const slices = resolved.filter((p) => p.mode === "slice");
+    const exact = resolved.filter((p) => !p.mode || p.mode === "exact");
+    if (writes.length) applyWrite(target, writes, name);
+    if (exact.length) applyExact(target, exact, name);
+    if (slices.length) applySliced(target, slices, name);
+  }
+};
+
 const main = (appDir) => {
   const dir = path.resolve(appDir);
   const ids = extract(fs.readFileSync(rendererAsset(dir, "js"), "utf8"));
@@ -65,6 +103,9 @@ const main = (appDir) => {
     }));
     applyExact(rendererAsset(dir, "js"), resolved, "monitor-idle");
   }
+
+  applyMixed(dir, readJson("04-privacy-wakelock.main.json"), "privacy-wakelock", null);
+  applyMixed(dir, readJson("05-privacy-wakelock.renderer.json"), "privacy-wakelock-ui", ids);
 
   const cssFile = rendererAsset(dir, "css");
   const cssAdd = fs.readFileSync(path.join(PATCHES, "03-monitor-idle.css.txt"), "utf8");

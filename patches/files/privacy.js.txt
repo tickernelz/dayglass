@@ -1,0 +1,18 @@
+export const PrivacyMode = {
+    OFF: "off",
+    BLUR: "blur",
+    MOSAIC: "mosaic",
+    TEXT: "text",
+};
+
+export const normalizePrivacyMode = (value) => {
+    const mode = typeof value === "string" ? value.trim().toLowerCase() : "";
+    switch (mode) {
+        case PrivacyMode.BLUR:
+        case PrivacyMode.MOSAIC:
+        case PrivacyMode.TEXT:
+            return mode;
+        default:
+            return PrivacyMode.OFF;
+    }
+};

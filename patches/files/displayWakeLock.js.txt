@@ -1,0 +1,40 @@
+import log from "electron-log";
+import { powerSaveBlocker } from "electron";
+
+let blockerId = null;
+
+const isActive = () => blockerId !== null && powerSaveBlocker.isStarted(blockerId);
+
+export const setDisplayWakeLock = (enabled) => {
+    if (enabled) {
+        if (isActive()) {
+            log.info("Display wake lock already active, blocker ID:", blockerId);
+            return true;
+        }
+        blockerId = null;
+        try {
+            blockerId = powerSaveBlocker.start("prevent-display-sleep");
+            log.info("Display wake lock started, blocker ID:", blockerId);
+            return true;
+        }
+        catch (error) {
+            log.error("Failed to start display wake lock:", error);
+            blockerId = null;
+            return false;
+        }
+    }
+    if (blockerId === null) {
+        return false;
+    }
+    try {
+        powerSaveBlocker.stop(blockerId);
+        log.info("Display wake lock stopped, blocker ID:", blockerId);
+    }
+    catch (error) {
+        log.error("Failed to stop display wake lock:", error);
+    }
+    blockerId = null;
+    return false;
+};
+
+export const isDisplayWakeLockActive = isActive;

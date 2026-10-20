@@ -11,6 +11,7 @@ const PATTERNS = {
   rows: /([A-Za-z_$][\w$]*)=\[\{label:`Launch ([\w.]+) on system startup`/,
   va: /([A-Za-z_$][\w$]*)\(([A-Za-z_$][\w$]*)\.settingGroup,\{\[\2\.disabled\]:!!e\.disabled\}\)/,
   vis: /checked:i,onChange:m,isVisible:(![01])\}\];/,
+  sleeps: /,await ([A-Za-z_$][\w$]*)\(2e3\)\}\}\}/,
   tray: /\{label:`((?:Minimize button minimizes|Hide) [\w.]+ (?:to tray|from dock))`,checked:i,onChange:m,/,
   APP: /\{label:`Launch ([\w.]+) on system startup`/,
 };

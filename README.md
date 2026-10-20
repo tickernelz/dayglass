@@ -13,6 +13,8 @@ The source archives live in this repository under `sources/`, stored as masked c
 | Auto-update | Update checks and installer handoff are disabled; a build stays on the version you installed |
 | Monitor selection | Settings gains a screenshot scope control: all monitors, primary only, or a picked subset |
 | Idle detection | Settings gains an idle-detection switch; when off, idle time is neither tracked nor reported |
+| Display sleep | While idle detection is off, the display is held awake through a `prevent-display-sleep` blocker so the machine never sleeps the screen out from under a tracked session |
+| Screenshot privacy | Settings gains a privacy control that masks every captured frame before it leaves the main process: `off`, `blur`, `mosaic`, or `text` (crisp edges, unreadable glyphs) |
 | Settings layout | The settings panel is regrouped into General, Screenshots, and Idle sections |
 
 Everything else keeps working: screenshots, activity sync, task notes, hotkeys, tray behavior, and sign-in.
@@ -20,7 +22,7 @@ Everything else keeps working: screenshots, activity sync, task notes, hotkeys, 
 ## Layout
 
 ```
-config/release.json       version, product name, target matrix
+config/release.json       version, release suffix, product name, target matrix
 sources/                  masked source archives plus manifest.json
   <target>/part-NNN.bin
   manifest.json           size, sha256, mask byte, part list per target
@@ -28,6 +30,9 @@ patches/                  declarative patch definitions
   01-monitor-idle.*       settings keys, defaults, provider load, capture call
   02-monitor-idle-ui.*    settings panel rows, scope control, styles
   03-monitor-idle.css.txt appended stylesheet block
+  04-privacy-wakelock.main.json    wake-lock module, privacy transforms, capture options, IPC
+  05-privacy-wakelock.renderer.json privacy setting, privacy control, wake-lock wiring
+  files/                  whole-file sources copied into the application tree
   10-liberal.main.json    main-process patches
   11-liberal.renderer.json renderer patches
 scripts/
@@ -62,7 +67,26 @@ dayglass-<version>-mac-arm64.zip
 dayglass-<version>-win-x64.exe
 ```
 
+`<version>` is the upstream version plus this build's own suffix, so a patched artifact never claims to be the upstream release it was cut from. With `"version": "6.23.0"` and `"releaseSuffix": "liberal.1"` in `config/release.json`, the artifact is `dayglass_6.23.0-liberal.1_amd64.deb`. The suffix is what changes when this repository ships a new patch set against the same upstream version; the leading version tracks the application source and only moves when `sources/` moves.
+
 Restored archives are cached in `cache/` and reused on the next run. `scripts/verify.cjs` exits non-zero if any patch is missing, so a silent bundle change fails the build instead of shipping an unpatched artifact.
+
+## Screenshot privacy
+
+The privacy mode is applied inside the main process, after the monitors are composited and before the frame is encoded, so the unmasked frame never reaches the renderer, the local database, or the network.
+
+| Mode | Transform | Effect |
+| --- | --- | --- |
+| `off` | none | Frame is captured as the screen shows it |
+| `blur` | gaussian blur, sigma scaled to the frame | Nothing on the frame stays legible |
+| `mosaic` | nearest-neighbour downscale then upscale to block size | Coarse blocks, no glyph survives |
+| `text` | lanczos downscale to 22% then upscale with sharpening | Edges and layout stay crisp, every glyph is destroyed |
+
+Transforms run in the existing sharp worker child process; if sharp is unavailable the capture falls back to `nativeImage` resampling, and if that also fails the screenshot is dropped instead of being uploaded unmasked. `scripts/verify.cjs` renders a text fixture, runs the worker for each mode, and asserts that detail collapses while the frame size is preserved.
+
+## Display sleep
+
+Electron's `powerSaveBlocker` with `prevent-display-sleep` holds the display awake on Windows, macOS, and Linux whenever idle detection is switched off, and releases it as soon as idle detection comes back on. The renderer drives it from the settings provider at startup and on every toggle; `scripts/verify.cjs` exercises the module against a stubbed `powerSaveBlocker` to prove it starts once, releases once, and re-arms.
 
 ## Replacing a source archive
 
@@ -79,6 +103,15 @@ Drop the new archive into `cache/` under the name the manifest expects, run `nod
 ## Continuous integration
 
 `.github/workflows/build.yml` runs the pipeline on a matrix of targets and uploads each artifact. Tagged pushes also attach the artifacts to a GitHub release. No step contacts an external release host.
+
+Cut a release by pushing a tag that matches the build version:
+
+```bash
+git tag v6.23.0-liberal.1
+git push origin v6.23.0-liberal.1
+```
+
+The tag builds every target in the matrix, attaches the five artifacts to the release, and is the only supported way to publish. `workflow_dispatch` runs the matrix without a release, which is the cheap way to check an anchor change before tagging.
 
 Windows installers are unsigned. macOS bundles are unsigned and not notarized, so the first launch requires the usual override in System Settings. Linux packages install normally.
 

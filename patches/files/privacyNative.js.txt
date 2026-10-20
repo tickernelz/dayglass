@@ -1,0 +1,41 @@
+import log from "electron-log";
+import { nativeImage } from "electron";
+import { PrivacyMode, normalizePrivacyMode } from "./privacy.js";
+
+const resample = (image, width, height, quality) => image.resize({
+    width: Math.max(1, width),
+    height: Math.max(1, height),
+    quality,
+});
+
+export const applyNativePrivacy = (buffer, mode) => {
+    const privacy = normalizePrivacyMode(mode);
+    if (privacy === PrivacyMode.OFF) {
+        return buffer;
+    }
+    if (!buffer?.length) {
+        return buffer;
+    }
+    try {
+        const image = nativeImage.createFromBuffer(buffer);
+        if (image.isEmpty()) {
+            return null;
+        }
+        const { width, height } = image.getSize();
+        if (width < 2 || height < 2) {
+            return null;
+        }
+        if (privacy === PrivacyMode.MOSAIC) {
+            const block = Math.max(8, Math.round(Math.min(width, height) / 70));
+            const blocks = resample(image, Math.round(width / block), Math.round(height / block), "fast");
+            return resample(blocks, width, height, "fast").toPNG();
+        }
+        const factor = privacy === PrivacyMode.TEXT ? 0.16 : 0.06;
+        const small = resample(image, Math.round(width * factor), Math.round(height * factor), "good");
+        return resample(small, width, height, "best").toPNG();
+    }
+    catch (error) {
+        log.error("Native screenshot privacy failed:", error);
+        return null;
+    }
+};
