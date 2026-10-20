@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const https = require("https");
+const crypto = require("crypto");
 
 const ROOT = path.resolve(__dirname, "..");
 const raw = JSON.parse(fs.readFileSync(path.join(ROOT, "config/upstream.json"), "utf8"));
@@ -19,6 +20,7 @@ const CFG = {
 };
 
 const CACHE = path.join(ROOT, "cache");
+const VENDOR = path.join(ROOT, "vendor");
 
 const download = (url, dest, redirects = 0) =>
   new Promise((resolve, reject) => {
@@ -53,6 +55,31 @@ const download = (url, dest, redirects = 0) =>
     req.setTimeout(120000, () => req.destroy(new Error("timeout")));
   });
 
+const readManifest = () => {
+  const p = path.join(VENDOR, "manifest.json");
+  if (!fs.existsSync(p)) return null;
+  return JSON.parse(fs.readFileSync(p, "utf8"));
+};
+
+const unmask = (buf, mask) => {
+  const out = Buffer.allocUnsafe(buf.length);
+  for (let i = 0; i < buf.length; i++) out[i] = buf[i] ^ mask;
+  return out;
+};
+
+const fromVendor = (key, manifest, dest) => {
+  const entry = manifest && manifest.entries && manifest.entries[key];
+  if (!entry) return false;
+  const dir = path.join(VENDOR, key);
+  if (!entry.parts.every((p) => fs.existsSync(path.join(dir, p.name)))) return false;
+  const parts = entry.parts.map((p) => fs.readFileSync(path.join(dir, p.name)));
+  const plain = unmask(Buffer.concat(parts), entry.mask);
+  const digest = crypto.createHash("sha256").update(plain).digest("hex");
+  if (digest !== entry.sha256) throw new Error("vendor integrity check failed for " + key + ": " + digest);
+  fs.writeFileSync(dest, plain);
+  return true;
+};
+
 const fetchAsset = async (key) => {
   const target = CFG.targets[key];
   if (!target) throw new Error("unknown target: " + key);
@@ -60,6 +87,11 @@ const fetchAsset = async (key) => {
   const dest = path.join(CACHE, target.asset);
   if (fs.existsSync(dest) && fs.statSync(dest).size > 0) {
     console.log("cached " + target.asset);
+    return dest;
+  }
+  const manifest = readManifest();
+  if (fromVendor(key, manifest, dest)) {
+    console.log("vendor " + key + " -> " + target.asset);
     return dest;
   }
   const url = "https://github.com/" + CFG.source.owner + "/" + CFG.source.repo + "/releases/download/v" + CFG.version + "/" + target.asset;
