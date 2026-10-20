@@ -1,13 +1,17 @@
 {
   "version": "6.23.0",
-  "releaseSuffix": "liberal.2",
+  "releaseSuffix": "liberal.3",
   "electronVersion": "41.10.7",
-  "productName": "dayglass",
-  "appId": "io.dayglass.desktop",
-  "bundleName": "c2NyaW4uaW8uYXBw",
+  "publicName": "dayglass",
+  "identity": {
+    "appId": "scrin.io",
+    "linux": "scrinio",
+    "mac": "scrin.io.app",
+    "win": "scrin.io"
+  },
   "targets": {
-    "linux-x64": { "kind": "deb", "arch": "amd64", "root": "data/opt", "appName": "c2NyaW4uaW8" },
-    "linux-arm64": { "kind": "deb", "arch": "arm64", "root": "data/opt", "appName": "c2NyaW4uaW8" },
+    "linux-x64": { "kind": "deb", "arch": "amd64", "root": "data/opt" },
+    "linux-arm64": { "kind": "deb", "arch": "arm64", "root": "data/opt" },
     "mac-x64": { "kind": "zip", "arch": "x64" },
     "mac-arm64": { "kind": "zip", "arch": "arm64" },
     "win-x64": { "kind": "nsis", "arch": "x64" }

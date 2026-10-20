@@ -16,7 +16,7 @@ const mask = (buf) => {
 
 const localName = (key, target) => {
   const ext = target.kind === "deb" ? "deb" : target.kind === "zip" ? "zip" : "exe";
-  return CFG.productName + "-" + key + "." + ext;
+  return CFG.publicName + "-" + key + "." + ext;
 };
 
 const pack = (key) => {

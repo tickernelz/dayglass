@@ -3,16 +3,11 @@ const path = require("path");
 const crypto = require("crypto");
 
 const ROOT = path.resolve(__dirname, "..");
-const dec = (v) => Buffer.from(v, "base64").toString("utf8");
 const raw = JSON.parse(fs.readFileSync(path.join(ROOT, "config/release.json"), "utf8"));
 
 const CFG = {
   ...raw,
   buildVersion: raw.releaseSuffix ? raw.version + "-" + raw.releaseSuffix : raw.version,
-  bundleName: dec(raw.bundleName),
-  targets: Object.fromEntries(
-    Object.entries(raw.targets).map(([k, v]) => [k, { ...v, appName: v.appName ? dec(v.appName) : undefined }])
-  ),
 };
 
 const CACHE = path.join(ROOT, "cache");
