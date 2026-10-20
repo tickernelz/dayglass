@@ -6,7 +6,8 @@ const { CFG, CACHE, fetchAsset } = require("./fetch.cjs");
 const ROOT = path.resolve(__dirname, "..");
 const WORK = path.join(ROOT, "work");
 const DIST = path.join(ROOT, "dist");
-const ASAR = path.join(ROOT, "node_modules", ".bin", process.platform === "win32" ? "asar.cmd" : "asar");
+const ASAR_ENTRY = path.join(ROOT, "node_modules", "@electron", "asar", "bin", "asar.mjs");
+const runAsar = (args) => run(process.execPath, [ASAR_ENTRY, ...args]);
 
 const run = (cmd, args, opts = {}) => {
   execFileSync(cmd, args, { stdio: "inherit", ...opts });
@@ -66,7 +67,7 @@ const extract = (target, archive, outDir) => {
     };
   }
   if (target.kind === "zip") {
-    run("unzip", ["-q", archive, "-d", outDir]);
+    run(sevenZip(), ["x", archive, "-o" + outDir, "-y"]);
     return {
       appDir: path.join(outDir, CFG.source.bundle, "Contents/Resources"),
       payloadRoot: outDir,
@@ -87,7 +88,7 @@ const extract = (target, archive, outDir) => {
 
 const packAsar = (appDir, asarPath) => {
   rm(asarPath);
-  run(ASAR, ["pack", appDir, asarPath, "--unpack-dir", "node_modules/@img"]);
+  runAsar(["pack", appDir, asarPath, "--unpack-dir", "node_modules/@img"]);
 };
 
 const repackDeb = (target, out, name) => {
@@ -132,7 +133,7 @@ const repackZip = (target, out, name) => {
   const finalName = name + "-" + CFG.version + "-mac-" + target.arch + ".zip";
   const finalPath = path.join(DIST, finalName);
   rm(finalPath);
-  run("zip", ["-qry", finalPath, name + ".app", "-x", "*.DS_Store"], { cwd: out });
+  run(sevenZip(), ["a", "-tzip", "-mm=Deflate", "-mx=9", finalPath, name + ".app", "-xr!*.DS_Store"], { cwd: out });
   return finalPath;
 };
 
@@ -188,8 +189,8 @@ const repackNsis = (target, out, name) => {
       2
     )
   );
-  const builder = path.join(ROOT, "node_modules", ".bin", process.platform === "win32" ? "electron-builder.cmd" : "electron-builder");
-  run(builder, ["--win", "nsis", "--" + target.arch, "--prepackaged", appRoot, "--config", "builder.json", "--config.electronVersion=" + CFG.electronVersion], {
+  const builder = path.join(ROOT, "node_modules", "electron-builder", "cli.js");
+  run(process.execPath, [builder, "--win", "nsis", "--" + target.arch, "--prepackaged", appRoot, "--config", "builder.json", "--config.electronVersion=" + CFG.electronVersion], {
     cwd: buildDir,
   });
   const produced = fs.readdirSync(path.join(DIST, "nsis")).filter((f) => f.endsWith(".exe"));
@@ -218,7 +219,7 @@ const main = async () => {
   const appDir = path.join(out, "appsrc");
   rm(appDir);
   mkdir(appDir);
-  run(ASAR, ["extract", asarPath, appDir]);
+  runAsar(["extract", asarPath, appDir]);
   console.log("extracted asar");
 
   run(process.execPath, [path.join(__dirname, "patch.cjs"), appDir]);
