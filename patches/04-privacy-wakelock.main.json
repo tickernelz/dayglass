@@ -24,22 +24,10 @@
     "new": "import { ImageFormat } from \"./imageFormat.js\";\nimport { normalizePrivacyMode } from \"./privacy.js\";\nimport { applyNativePrivacy } from \"./privacyNative.js\";"
   },
   {
-    "id": "ts-active-privacy",
-    "file": "dist-main/main/utils/screenshot/takeScreenshot.js",
-    "old": "const FORCE_JPEG_FALLBACK = process.env.SCRINIO_FORCE_JPEG_FALLBACK === \"1\";",
-    "new": "let activePrivacy = \"off\";\nconst FORCE_JPEG_FALLBACK = process.env.SCRINIO_FORCE_JPEG_FALLBACK === \"1\";"
-  },
-  {
-    "id": "ts-native-fallback-privacy",
-    "file": "dist-main/main/utils/screenshot/takeScreenshot.js",
-    "old": "const nativeImageJpegFallback = (buffer) => {\n    if (!buffer?.length)\n        return;",
-    "new": "const nativeImageJpegFallback = (buffer) => {\n    buffer = applyNativePrivacy(buffer, activePrivacy);\n    if (!buffer?.length) {\n        log.warn(\"⚠️ Screenshot dropped: the privacy transform could not be applied\");\n        return;\n    }"
-  },
-  {
     "id": "ts-combine-privacy",
     "file": "dist-main/main/utils/screenshot/takeScreenshot.js",
-    "old": "async function combineCompressImages(imageBuffers) {\n    const nonEmptyBuffers = imageBuffers.filter((buffer) => buffer?.length);",
-    "new": "async function combineCompressImages(imageBuffers, privacy = \"off\") {\n    activePrivacy = privacy;\n    const nonEmptyBuffers = imageBuffers.filter((buffer) => buffer?.length);"
+    "old": "async function combineCompressImages(imageBuffers) {",
+    "new": "async function combineCompressImages(imageBuffers, privacy = \"off\") {"
   },
   {
     "id": "ts-worker-privacy",
@@ -178,5 +166,18 @@
     "file": "dist-main/main/preload.cjs",
     "old": "    stopAppNapPrevention: () => ipcInvoke(\"stopAppNapPrevention\"),\n});",
     "new": "    stopAppNapPrevention: () => ipcInvoke(\"stopAppNapPrevention\"),\n    setDisplayWakeLock: (enabled) => ipcInvoke(\"setDisplayWakeLock\", enabled),\n    getDisplays: () => ipcInvoke(\"getDisplays\"),\n});"
+  },
+  {
+    "id": "ts-fallback-signature",
+    "file": "dist-main/main/utils/screenshot/takeScreenshot.js",
+    "old": "const nativeImageJpegFallback = (buffer) => {\n    if (!buffer?.length)\n        return;",
+    "new": "const nativeImageJpegFallback = (buffer, privacy) => {\n    buffer = applyNativePrivacy(buffer, privacy);\n    if (!buffer?.length) {\n        log.warn(\"⚠️ Screenshot dropped: the privacy transform could not be applied\");\n        return;\n    }"
+  },
+  {
+    "id": "ts-fallback-calls",
+    "file": "dist-main/main/utils/screenshot/takeScreenshot.js",
+    "old": "nativeImageJpegFallback(nonEmptyBuffers[0])",
+    "new": "nativeImageJpegFallback(nonEmptyBuffers[0], privacy)",
+    "mode": "replaceAll"
   }
 ]

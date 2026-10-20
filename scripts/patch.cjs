@@ -17,6 +17,12 @@ const applyExact = (target, patches, label) => {
   let s = fs.readFileSync(target, "utf8");
   for (const p of patches) {
     const n = s.split(p.old).length - 1;
+    if (p.mode === "replaceAll") {
+      if (n < 1) throw new Error(label + ": " + p.id + " matched 0 times (need at least 1)");
+      s = s.split(p.old).join(p.new);
+      console.log("  ok " + label + " " + p.id + " (" + n + ")");
+      continue;
+    }
     if (n !== 1) throw new Error(label + ": " + p.id + " matched " + n + " times (need exactly 1)");
     s = s.replace(p.old, p.new);
     console.log("  ok " + label + " " + p.id);
@@ -75,7 +81,7 @@ const applyMixed = (dir, entries, label, ids) => {
     const name = path.basename(rel);
     const writes = resolved.filter((p) => p.mode === "write");
     const slices = resolved.filter((p) => p.mode === "slice");
-    const exact = resolved.filter((p) => !p.mode || p.mode === "exact");
+    const exact = resolved.filter((p) => !p.mode || p.mode === "exact" || p.mode === "replaceAll");
     if (writes.length) applyWrite(target, writes, name);
     if (exact.length) applyExact(target, exact, name);
     if (slices.length) applySliced(target, slices, name);
