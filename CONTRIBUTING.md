@@ -28,12 +28,14 @@ Patch definitions are declarative and live in `patches/`. Three shapes exist.
 
 These guards exist because a silent no-op patch ships an unpatched binary. Never weaken them.
 
-## After an upstream version bump
+## Updating the pinned version
 
-1. Update `version` in `config/upstream.json`.
-2. Run `npm run build -- linux-x64` and read the failure. The first missing identifier names the symbol that changed.
-3. Fix anchors in `scripts/identifiers.cjs`, then rerun until `verify.cjs` passes.
-4. Repeat for one target per platform — mac and win bundles differ from linux.
+1. Put the new archive into `cache/` under the name recorded in `sources/manifest.json`.
+2. Run `node scripts/sources.cjs <target>` and commit the refreshed `sources/` directory.
+3. Set `version` in `config/release.json`.
+4. Run `npm run build -- linux-x64` and read the failure. The first missing identifier names the symbol that changed.
+5. Fix anchors in `scripts/identifiers.cjs`, then rerun until `verify.cjs` passes.
+6. Repeat for one target per platform — mac and win bundles differ from linux.
 
 ## Commit style
 

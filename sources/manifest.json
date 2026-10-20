@@ -1,0 +1,134 @@
+{
+  "version": "6.23.0",
+  "entries": {
+    "linux-x64": {
+      "key": "linux-x64",
+      "name": "dayglass-linux-x64.deb",
+      "size": 138408624,
+      "sha256": "34fbcc60b83e4eaa1973576c44887222d3d2de9c595cd0e68e383925f50b17f5",
+      "mask": 90,
+      "parts": [
+        {
+          "name": "part-000.bin",
+          "size": 41943040
+        },
+        {
+          "name": "part-001.bin",
+          "size": 41943040
+        },
+        {
+          "name": "part-002.bin",
+          "size": 41943040
+        },
+        {
+          "name": "part-003.bin",
+          "size": 12579504
+        }
+      ]
+    },
+    "linux-arm64": {
+      "key": "linux-arm64",
+      "name": "dayglass-linux-arm64.deb",
+      "size": 132959328,
+      "sha256": "eadb1d2a65598b46efec08734594d8730ece5369b3156e74d171aa9a161866a0",
+      "mask": 90,
+      "parts": [
+        {
+          "name": "part-000.bin",
+          "size": 41943040
+        },
+        {
+          "name": "part-001.bin",
+          "size": 41943040
+        },
+        {
+          "name": "part-002.bin",
+          "size": 41943040
+        },
+        {
+          "name": "part-003.bin",
+          "size": 7130208
+        }
+      ]
+    },
+    "mac-x64": {
+      "key": "mac-x64",
+      "name": "dayglass-mac-x64.zip",
+      "size": 172370051,
+      "sha256": "76e2e2d3cb1620a3e5941cb79d94e59762431739f04db408f2246c3921b10ccd",
+      "mask": 90,
+      "parts": [
+        {
+          "name": "part-000.bin",
+          "size": 41943040
+        },
+        {
+          "name": "part-001.bin",
+          "size": 41943040
+        },
+        {
+          "name": "part-002.bin",
+          "size": 41943040
+        },
+        {
+          "name": "part-003.bin",
+          "size": 41943040
+        },
+        {
+          "name": "part-004.bin",
+          "size": 4597891
+        }
+      ]
+    },
+    "mac-arm64": {
+      "key": "mac-arm64",
+      "name": "dayglass-mac-arm64.zip",
+      "size": 163660910,
+      "sha256": "82c0fe7ce707c25b6cb1bcc0d385bb74923d3e854e244d792869a8c1160ef209",
+      "mask": 90,
+      "parts": [
+        {
+          "name": "part-000.bin",
+          "size": 41943040
+        },
+        {
+          "name": "part-001.bin",
+          "size": 41943040
+        },
+        {
+          "name": "part-002.bin",
+          "size": 41943040
+        },
+        {
+          "name": "part-003.bin",
+          "size": 37831790
+        }
+      ]
+    },
+    "win-x64": {
+      "key": "win-x64",
+      "name": "dayglass-win-x64.exe",
+      "size": 160042768,
+      "sha256": "6e819ea274c3462a2b57a6ddb61db860387aa440b9238e5da2e8e524b1e8e2a7",
+      "mask": 90,
+      "parts": [
+        {
+          "name": "part-000.bin",
+          "size": 41943040
+        },
+        {
+          "name": "part-001.bin",
+          "size": 41943040
+        },
+        {
+          "name": "part-002.bin",
+          "size": 41943040
+        },
+        {
+          "name": "part-003.bin",
+          "size": 34213648
+        }
+      ]
+    }
+  }
+}

@@ -61,7 +61,7 @@ const extract = (target, archive, outDir) => {
     mkdir(path.join(outDir, "data"));
     run("tar", ["-xf", path.join(outDir, data), "-C", path.join(outDir, "data")]);
     return {
-      appDir: path.join(outDir, "data/opt", CFG.source.bundle.replace(/\.app$/, ""), "resources"),
+      appDir: path.join(outDir, target.root, target.appName, "resources"),
       payloadRoot: outDir,
       asarName: "app.asar",
     };
@@ -69,7 +69,7 @@ const extract = (target, archive, outDir) => {
   if (target.kind === "zip") {
     run(sevenZip(), ["x", archive, "-o" + outDir, "-y"]);
     return {
-      appDir: path.join(outDir, CFG.source.bundle, "Contents/Resources"),
+      appDir: path.join(outDir, CFG.bundleName, "Contents/Resources"),
       payloadRoot: outDir,
       asarName: "app.asar",
     };
@@ -92,6 +92,22 @@ const packAsar = (appDir, asarPath) => {
 };
 
 const repackDeb = (target, out, name) => {
+  const optDir = path.join(out, target.root);
+  const oldApp = path.join(optDir, target.appName);
+  const newApp = path.join(optDir, name);
+  if (fs.existsSync(oldApp) && oldApp !== newApp) {
+    rm(newApp);
+    fs.renameSync(oldApp, newApp);
+  }
+  const desktopDir = path.join(out, "data/usr/share/applications");
+  if (fs.existsSync(desktopDir)) {
+    for (const f of fs.readdirSync(desktopDir)) {
+      const full = path.join(desktopDir, f);
+      const body = fs.readFileSync(full, "utf8").split(target.appName).join(name);
+      fs.writeFileSync(full, body);
+      if (f.startsWith(target.appName)) fs.renameSync(full, path.join(desktopDir, f.replace(target.appName, name)));
+    }
+  }
   const controlDir = path.join(out, "control");
   rm(controlDir);
   mkdir(controlDir);
@@ -126,7 +142,7 @@ const repackDeb = (target, out, name) => {
 };
 
 const repackZip = (target, out, name) => {
-  const bundle = path.join(out, CFG.source.bundle);
+  const bundle = path.join(out, CFG.bundleName);
   const renamed = path.join(out, name + ".app");
   rm(renamed);
   fs.renameSync(bundle, renamed);
