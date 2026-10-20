@@ -15,12 +15,39 @@ const rm = (p) => fs.rmSync(p, { recursive: true, force: true });
 const mkdir = (p) => fs.mkdirSync(p, { recursive: true });
 
 const sevenZip = () => {
-  if (process.env.SEVEN_ZIP) return process.env.SEVEN_ZIP;
+  if (sevenZip.cached) return sevenZip.cached;
+  const candidates = [];
+  if (process.env.SEVEN_ZIP) candidates.push(process.env.SEVEN_ZIP);
+  candidates.push(process.platform === "win32" ? "7z.exe" : "7z");
   try {
-    return require("7zip-bin").path7za;
-  } catch {
-    return process.platform === "win32" ? "7za.exe" : "7z";
+    const bin = require("7zip-bin").path7za;
+    if (process.platform !== "win32") {
+      const mode = fs.statSync(bin).mode;
+      if (!(mode & 0o111)) fs.chmodSync(bin, mode | 0o755);
+    }
+    candidates.push(bin);
+  } catch {}
+  for (const candidate of candidates) {
+    try {
+      execFileSync(candidate, ["i"], { stdio: "ignore" });
+      sevenZip.cached = candidate;
+      return candidate;
+    } catch {}
   }
+  throw new Error("no working 7z binary found; set SEVEN_ZIP");
+};
+
+const findFile = (dir, re) => {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      const hit = findFile(full, re);
+      if (hit) return hit;
+    } else if (re.test(entry.name)) {
+      return full;
+    }
+  }
+  return null;
 };
 
 const extract = (target, archive, outDir) => {
@@ -48,8 +75,8 @@ const extract = (target, archive, outDir) => {
   }
   if (target.kind === "nsis") {
     run(sevenZip(), ["x", archive, "-o" + outDir, "-y"], {});
-    const inner = path.join(outDir, "$PLUGINSDIR", "app-64.7z");
-    if (!fs.existsSync(inner)) throw new Error("app-64.7z missing from installer");
+    const inner = findFile(outDir, /^app-64\.7z$/);
+    if (!inner) throw new Error("app-64.7z missing from installer");
     const appRoot = path.join(outDir, "app");
     mkdir(appRoot);
     run(sevenZip(), ["x", inner, "-o" + appRoot, "-y"], {});
@@ -111,7 +138,8 @@ const repackZip = (target, out, name) => {
 
 const repackNsis = (target, out, name) => {
   const appRoot = path.join(out, "app");
-  const inner = path.join(out, "$PLUGINSDIR", "app-64.7z");
+  const inner = findFile(out, /^app-64\.7z$/);
+  if (!inner) throw new Error("app-64.7z missing before repack");
   rm(inner);
   run(sevenZip(), ["a", inner, "./*", "-mx=9"], { cwd: appRoot });
   const buildDir = path.join(out, "builder");

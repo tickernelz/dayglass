@@ -28,7 +28,7 @@ jobs:
             os: ubuntu-24.04-arm
             artifact: dayglass_*_arm64.deb
           - target: mac-x64
-            os: macos-13
+            os: macos-15-intel
             artifact: dayglass-*-mac-x64.zip
           - target: mac-arm64
             os: macos-14
@@ -49,11 +49,15 @@ jobs:
 
       - name: Install packaging tools (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y ar tar xz-utils zip unzip
+        run: sudo apt-get update && sudo apt-get install -y binutils tar xz-utils zip unzip
 
       - name: Install NSIS (Linux)
         if: runner.os == 'Linux' && matrix.target == 'win-x64'
-        run: sudo apt-get install -y nsis wine64
+        run: sudo apt-get install -y nsis wine
+
+      - name: Install 7-Zip (Windows)
+        if: runner.os == 'Windows'
+        run: choco install 7zip -y --no-progress
 
       - name: Build
         run: node scripts/build.cjs ${{ matrix.target }}
