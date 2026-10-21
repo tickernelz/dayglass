@@ -107,6 +107,8 @@ Transforms run in the existing sharp worker child process; if sharp is unavailab
 
 The tracking loop already ticks once per second, so the warning is scheduled against the same minute boundary the capture uses: once the remaining time drops to the configured lead, the main process raises a native notification through the same bridge the rest of the app uses (`notify-send` with a transient hint on Linux, `Notification` on macOS and Windows). The warning fires at most once per scheduled capture, is skipped entirely while a manager has screenshots disabled, and the confirmation is raised only when a frame actually came back.
 
+The block is injected at the top of each tracking tick, before the capture branch, and is keyed by activity plus scheduled minute. An earlier revision injected it inside the capture branch, where the remaining time is already negative by the time it runs — the warning could never fire, and only the confirmation appeared. `scripts/verify.cjs` now asserts the placement as well as the behaviour, and runs against all three platform bundles.
+
 | Setting | Values | Default |
 | --- | --- | --- |
 | `screenshotNoticeMode` | `off`, `before`, `after`, `both` | `both` |

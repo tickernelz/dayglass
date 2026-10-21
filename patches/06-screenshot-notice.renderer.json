@@ -56,8 +56,8 @@
   {
     "id": "notice-loop-pre",
     "file": "@renderer:js",
-    "old": "{{shotMinute}}<={{shotDuration}}){E.default.info(`Taking screenshot - screenshotDuration:`,",
-    "new": "{{shotMinute}}<={{shotDuration}}){let noticeMode=await this.rootContext.varsRepository.getValue({{gs}}.ScreenshotNoticeMode)||`both`,noticeLead=Number(await this.rootContext.varsRepository.getValue({{gs}}.ScreenshotNoticeLead))||10,noticeBefore=noticeMode===`before`||noticeMode===`both`,noticeAfter=noticeMode===`after`||noticeMode===`both`,noticeDue=t.fromTime+{{shotMinute}}*6e4-Date.now();noticeBefore&&noticeDue>0&&noticeDue<=noticeLead*1e3&&this.noticeMinute!=={{shotMinute}}&&(this.noticeMinute={{shotMinute}},(await this.rootContext.employmentRepository.getEmployment(t.employmentId))?.disableScreenshots||window.mainAPI.showSystemNotification({title:`Screenshot in ${Math.max(1,Math.round(noticeDue/1e3))}s`,message:`A screenshot of your screen will be taken shortly.`}).catch(()=>{}));E.default.info(`Taking screenshot - screenshotDuration:`,"
+    "old": "let {{shotDuration}}={{act}}.durationMinutes;",
+    "new": "let {{shotDuration}}={{act}}.durationMinutes;let noticeMode=await this.rootContext.varsRepository.getValue({{gs}}.ScreenshotNoticeMode)||`both`,noticeLead=Number(await this.rootContext.varsRepository.getValue({{gs}}.ScreenshotNoticeLead))||10,noticeBefore=noticeMode===`before`||noticeMode===`both`,noticeAfter=noticeMode===`after`||noticeMode===`both`,noticeDue={{act}}.fromTime+{{shotMinute}}*6e4-Date.now(),noticeKey={{act}}.activityId+`:`+{{shotMinute}};noticeBefore&&noticeDue>0&&noticeDue<=noticeLead*1e3&&this.noticeKey!==noticeKey&&(this.noticeKey=noticeKey,(await this.rootContext.employmentRepository.getEmployment({{act}}.employmentId))?.disableScreenshots||window.mainAPI.showSystemNotification({title:`Screenshot in ${Math.max(1,Math.round(noticeDue/1e3))}s`,message:`A screenshot of your screen will be taken shortly.`}).catch(()=>{}));"
   },
   {
     "id": "notice-loop-post",

@@ -229,71 +229,96 @@ const noticePersistenceChecks = () => {
 const noticeChecks = () => {
   const gsMatch = /getValue\(([A-Za-z_$][\w$]*)\.HideFromTaskBar\)/.exec(jsSrc);
   const start = jsSrc.indexOf("noticeMode=await");
-  const end = jsSrc.indexOf("}).catch(()=>{}));", start);
-  if (!gsMatch || start < 0 || end < 0) {
+  const tail = "}).catch(()=>{}));";
+  const end = start < 0 ? -1 : jsSrc.indexOf(tail, start);
+  const captureAt = jsSrc.indexOf("Taking screenshot - screenshotDuration:");
+  if (!gsMatch || start < 0 || end < 0 || captureAt < 0) {
     console.log("  notice snippet not found in the bundle");
     return [["notice harness snippet present", false]];
   }
   const gs = gsMatch[1];
-  const snippet = jsSrc.slice(start, end + "}).catch(()=>{}));".length);
-  const body = "return (async () => { let " + snippet + " return true; })()";
-  const harness = new Function(gs, "window", "t", "n", body);
+  const snippet = jsSrc.slice(start, end + tail.length);
 
-  const run = async (opts) => {
+  const branchAt = jsSrc.lastIndexOf("if(", captureAt);
+  const before = jsSrc.slice(Math.max(0, start - 40), start);
+  const ordering = [
+    ["notice runs before the capture branch, not inside it", start < branchAt],
+    ["notice is inserted at a statement boundary", /;/.test(before) && !/(if\(|&&|,)\s*$/.test(before)],
+  ];
+
+  const body = "return (async () => { let " + snippet + " return true; })()";
+  const harness = new Function("Date", "t", "n", gs, "window", body);
+
+  const fire = async (opts) => {
     const calls = [];
-    const stub = {
+    const ctx = opts.ctx || {
+      noticeKey: opts.noticeKey,
       rootContext: {
-        varsRepository: {
-          getValue: async (key) => (key === "mode" ? opts.mode : opts.lead),
-        },
-        employmentRepository: {
-          getEmployment: async () => ({ disableScreenshots: !!opts.disabled }),
-        },
-      },
-      noticeMinute: undefined,
-    };
-    const win = {
-      mainAPI: {
-        showSystemNotification: (payload) => {
-          calls.push(payload);
-          return Promise.resolve(true);
-        },
+        varsRepository: { getValue: async (key) => (key === "mode" ? opts.mode : opts.lead) },
+        employmentRepository: { getEmployment: async () => ({ disableScreenshots: !!opts.disabled }) },
       },
     };
-    const activity = { fromTime: Date.now() - 60000 + opts.dueMs, employmentId: "e" };
+    const win = { mainAPI: { showSystemNotification: (p) => { calls.push(p); return Promise.resolve(true); } } };
+    const now = opts.now;
+    const fakeDate = { now: () => now };
+    const activity = { activityId: opts.activityId || "act-1", fromTime: opts.fromTime, employmentId: "e" };
     const keys = { ScreenshotNoticeMode: "mode", ScreenshotNoticeLead: "lead" };
-    await harness.call(stub, keys, win, activity, 1);
-    return { calls, stub, win, keys, activity };
+    await harness.call(ctx, fakeDate, activity, opts.nextMinute, keys, win);
+    return { calls, ctx };
   };
 
-  const post = jsSrc.slice(jsSrc.indexOf("noticeAfter&&a?.imageData"), jsSrc.indexOf("let o=this.getRandomInterval(i);", jsSrc.indexOf("noticeAfter&&a?.imageData")));
-  const postHarness = new Function("noticeAfter", "a", "window", post);
-
-  const runPost = (noticeAfter, hasImage) => {
-    const calls = [];
-    const win = { mainAPI: { showSystemNotification: (payload) => { calls.push(payload); return Promise.resolve(true); } } };
-    const shot = hasImage ? { imageData: { buffer: { length: 1024 } } } : { imageData: null };
-    postHarness(noticeAfter, shot, win);
-    return calls;
+  const sweep = async (opts) => {
+    const fromTime = 1_700_000_000_000;
+    const nextMinute = 1;
+    const dueAt = fromTime + nextMinute * 60000;
+    const fired = [];
+    const ctx = {
+      noticeKey: undefined,
+      rootContext: {
+        varsRepository: { getValue: async (key) => (key === "mode" ? opts.mode : opts.lead) },
+        employmentRepository: { getEmployment: async () => ({ disableScreenshots: !!opts.disabled }) },
+      },
+    };
+    for (let offset = 1000; offset <= 62000; offset += 1000) {
+      const result = await fire({ ...opts, fromTime, nextMinute, now: dueAt - (60000 - offset), ctx });
+      if (result.calls.length) fired.push({ offset, title: result.calls[0].title });
+    }
+    return fired;
   };
 
   return (async () => {
-    const checks = [];
-    const full = await run({ mode: "both", lead: 10, dueMs: 10000, disabled: false });
-    checks.push(["notice fires inside the lead window", full.calls.length === 1]);
-    checks.push(["notice counts down the remaining seconds", /Screenshot in 10s/.test(full.calls[0]?.title || "")]);
+    const checks = [...ordering];
 
-    await harness.call(full.stub, full.keys, full.win, full.activity, 1);
-    checks.push(["notice does not repeat for the same minute", full.calls.length === 1]);
+    const both = await sweep({ mode: "both", lead: 10, disabled: false });
+    checks.push(["notice fires once inside the lead window", both.length === 1]);
+    checks.push(["notice fires with the remaining seconds", /Screenshot in 10s/.test(both[0]?.title || "")]);
+    checks.push(["notice fires ten seconds before the capture, not at it", both[0]?.offset === 50000]);
 
-    checks.push(["notice stays silent before the window", (await run({ mode: "both", lead: 10, dueMs: 30000, disabled: false })).calls.length === 0]);
-    checks.push(["notice stays silent once the capture is already due", (await run({ mode: "both", lead: 10, dueMs: -2000, disabled: false })).calls.length === 0]);
-    checks.push(["notice stays silent when the mode is off", (await run({ mode: "off", lead: 10, dueMs: 10000, disabled: false })).calls.length === 0]);
-    checks.push(["notice stays silent for after-only", (await run({ mode: "after", lead: 10, dueMs: 10000, disabled: false })).calls.length === 0]);
-    checks.push(["notice stays silent when screenshots are disabled", (await run({ mode: "both", lead: 10, dueMs: 10000, disabled: true })).calls.length === 0]);
-    checks.push(["notice honours a custom lead time", (await run({ mode: "both", lead: 30, dueMs: 25000, disabled: false })).calls.length === 1]);
-    checks.push(["notice honours a short lead time", (await run({ mode: "before", lead: 5, dueMs: 4000, disabled: false })).calls.length === 1]);
+    const nearCapture = await fire({ mode: "both", lead: 10, disabled: false, fromTime: 1_700_000_000_000, nextMinute: 1, now: 1_700_000_060_000 });
+    checks.push(["notice never fires once the capture is due", nearCapture.calls.length === 0]);
 
+    checks.push(["notice stays silent under off", (await sweep({ mode: "off", lead: 10, disabled: false })).length === 0]);
+    checks.push(["notice stays silent for after-only", (await sweep({ mode: "after", lead: 10, disabled: false })).length === 0]);
+    checks.push(["notice stays silent when screenshots are disabled", (await sweep({ mode: "both", lead: 10, disabled: true })).length === 0]);
+
+    const wide = await sweep({ mode: "before", lead: 30, disabled: false });
+    checks.push(["notice honours a 30 second lead", wide.length === 1 && wide[0]?.offset === 30000]);
+    const short = await sweep({ mode: "both", lead: 5, disabled: false });
+    checks.push(["notice honours a 5 second lead", short.length === 1 && short[0]?.offset === 55000]);
+
+    const repeated = await fire({ mode: "both", lead: 10, disabled: false, fromTime: 1_700_000_000_000, nextMinute: 1, now: 1_700_000_052_000, noticeKey: "act-1:1" });
+    checks.push(["notice does not repeat for the same capture", repeated.calls.length === 0]);
+    const nextActivity = await fire({ mode: "both", lead: 10, disabled: false, fromTime: 1_700_000_000_000, nextMinute: 1, now: 1_700_000_052_000, noticeKey: "act-0:1", activityId: "act-1" });
+    checks.push(["notice fires again for a new activity", nextActivity.calls.length === 1]);
+
+    const post = jsSrc.slice(jsSrc.indexOf("noticeAfter&&a?.imageData"), jsSrc.indexOf("let o=this.getRandomInterval(i);", jsSrc.indexOf("noticeAfter&&a?.imageData")));
+    const postHarness = new Function("noticeAfter", "a", "window", post);
+    const runPost = (noticeAfter, hasImage) => {
+      const calls = [];
+      const win = { mainAPI: { showSystemNotification: (p) => { calls.push(p); return Promise.resolve(true); } } };
+      postHarness(noticeAfter, hasImage ? { imageData: { buffer: { length: 1024 } } } : { imageData: null }, win);
+      return calls;
+    };
     const taken = runPost(true, true);
     checks.push(["taken notice fires after a capture", taken.length === 1 && /Screenshot taken/.test(taken[0]?.title || "")]);
     checks.push(["taken notice skips a failed capture", runPost(true, false).length === 0]);
