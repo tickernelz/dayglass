@@ -140,6 +140,87 @@ const assertZipIdentity = (zipPath, bundle) => {
   console.log("  identity bundle=" + bundle);
 };
 
+const assertRpmIdentity = (rpmPath, identity) => {
+  const name = execFileSync("rpm", ["-qp", "--queryformat", "%{NAME}", rpmPath], { encoding: "utf8" }).trim();
+  if (name !== identity) throw new Error("artifact package name is " + name + ", expected " + identity);
+  console.log("  identity package=" + name + " (rpm)");
+};
+
+const repackRpm = (target, out, meta) => {
+  const identity = CFG.identity.linux;
+  const rpmArch = target.arch === "amd64" ? "x86_64" : target.arch === "arm64" ? "aarch64" : target.arch;
+  const rpmVersion = CFG.version;
+  const rpmRelease = (CFG.releaseSuffix || "1").replace(/-/g, ".");
+
+  const topdir = path.join(WORK, "rpmbuild-" + target.arch);
+  rm(topdir);
+  mkdir(path.join(topdir, "SOURCES"));
+  mkdir(path.join(topdir, "SPECS"));
+  mkdir(path.join(topdir, "BUILD"));
+  mkdir(path.join(topdir, "RPMS"));
+
+  const dataDir = path.join(out, "data");
+  const specPath = path.join(topdir, "SPECS", identity + ".spec");
+
+  const specContent = [
+    "%define _binary_payload w7.zstdio",
+    "%define _build_id_links none",
+    "%undefine __strip",
+    "%global __os_install_post %{nil}",
+    "AutoReqProv: no",
+    "",
+    "Name: " + identity,
+    "Version: " + rpmVersion,
+    "Release: " + rpmRelease,
+    "Summary: " + identity + " time tracking client (patched build)",
+    "License: " + (meta.license || "Proprietary"),
+    "URL: " + (meta.homepage || "https://" + CFG.identity.appId + "/"),
+    "Requires: gtk3, nss, alsa-lib, libnotify, libsecret, libXScrnSaver, libXtst",
+    "Recommends: flameshot, grim, gnome-screenshot, scrot, xdg-desktop-portal, xdg-desktop-portal-wlr, xdg-desktop-portal-gnome",
+    "",
+    "%description",
+    identity + " time tracking client (patched build)",
+    "",
+    "%install",
+    "mkdir -p %{buildroot}",
+    "cp -a " + dataDir + "/* %{buildroot}/",
+    "",
+    "%post",
+    "if [ -d /opt/" + identity + " ]; then",
+    "    if [ ! -L /usr/bin/" + identity + " ]; then",
+    "        ln -sf /opt/" + identity + "/" + identity + " /usr/bin/" + identity,
+    "    fi",
+    "fi",
+    "",
+    "%postun",
+    "if [ \"$1\" = \"0\" ]; then",
+    "    rm -f /usr/bin/" + identity,
+    "fi",
+    "",
+    "%files",
+    "/opt/" + identity,
+    "/usr/share/applications/" + identity + ".desktop",
+    "/usr/share/icons/hicolor/*/apps/" + identity + ".png",
+    "/usr/share/doc/" + identity + "/*",
+    "",
+  ].join("\n");
+
+  fs.writeFileSync(specPath, specContent);
+  run("rpmbuild", ["-bb", "--target", rpmArch, "--define", "_topdir " + topdir, specPath]);
+
+  const rpmDir = path.join(topdir, "RPMS", rpmArch);
+  const builtRpm = fs.readdirSync(rpmDir).find((f) => f.endsWith(".rpm"));
+  if (!builtRpm) throw new Error("rpm package was not generated in " + rpmDir);
+
+  const finalName = CFG.publicName + "-" + CFG.buildVersion + "." + rpmArch + ".rpm";
+  const finalPath = path.join(DIST, finalName);
+  rm(finalPath);
+  fs.renameSync(path.join(rpmDir, builtRpm), finalPath);
+  assertRpmIdentity(finalPath, identity);
+  rm(topdir);
+  return finalPath;
+};
+
 const repackDeb = (target, out, meta) => {
   const identity = CFG.identity.linux;
   const optDir = path.join(out, target.root);
@@ -312,13 +393,21 @@ const main = async () => {
   packAsar(appDir, asarPath);
   console.log("packed asar");
 
-  const finalPath =
-    target.kind === "deb"
-      ? repackDeb(target, out, meta)
-      : target.kind === "zip"
-        ? repackZip(target, out)
-        : repackNsis(target, out);
-  console.log("artifact: " + path.relative(ROOT, finalPath) + " (" + (fs.statSync(finalPath).size / 1048576).toFixed(1) + " MB)");
+  let artifacts = [];
+  if (target.kind === "deb") {
+    const debPath = repackDeb(target, out, meta);
+    artifacts.push(debPath);
+    const rpmPath = repackRpm(target, out, meta);
+    artifacts.push(rpmPath);
+  } else if (target.kind === "zip") {
+    artifacts.push(repackZip(target, out));
+  } else if (target.kind === "nsis") {
+    artifacts.push(repackNsis(target, out));
+  }
+
+  for (const finalPath of artifacts) {
+    console.log("artifact: " + path.relative(ROOT, finalPath) + " (" + (fs.statSync(finalPath).size / 1048576).toFixed(1) + " MB)");
+  }
 };
 
 main().catch((e) => {
