@@ -1,0 +1,56 @@
+[
+  {
+    "id": "close-tray-enum",
+    "file": "@renderer:js",
+    "old": "e.SCREENSHOT_NOTICE_LEAD=`screenshotNoticeLead`,e}",
+    "new": "e.SCREENSHOT_NOTICE_LEAD=`screenshotNoticeLead`,e.CLOSE_TO_TRAY=`closeToTray`,e}"
+  },
+  {
+    "id": "close-tray-default",
+    "file": "@renderer:js",
+    "old": "[{{K}}.SCREENSHOT_NOTICE_LEAD]:10,displays:[]",
+    "new": "[{{K}}.SCREENSHOT_NOTICE_LEAD]:10,[{{K}}.CLOSE_TO_TRAY]:!1,displays:[]"
+  },
+  {
+    "id": "close-tray-setting-key",
+    "file": "@renderer:js",
+    "old": "e.ScreenshotNoticeLead=`screenshotNoticeLead`,e.IsAutoStartEnabled=",
+    "new": "e.ScreenshotNoticeLead=`screenshotNoticeLead`,e.CloseToTray=`closeToTray`,e.IsAutoStartEnabled="
+  },
+  {
+    "id": "close-tray-provider-destructure",
+    "file": "@renderer:js",
+    "old": "let[n,i,o,s,c,l,u,d,y,w,privacySetting,noticeSetting,leadSetting]=await Promise.all([",
+    "new": "let[n,i,o,s,c,l,u,d,y,w,privacySetting,noticeSetting,leadSetting,closeSetting]=await Promise.all(["
+  },
+  {
+    "id": "close-tray-provider-load",
+    "file": "@renderer:js",
+    "old": "r.getValue({{gs}}.ScreenshotNoticeLead)]);window.mainAPI.setDisplayWakeLock(",
+    "new": "r.getValue({{gs}}.ScreenshotNoticeLead),r.getValue({{gs}}.CloseToTray)]);window.mainAPI.setTrayPreferences({minimizeToTray:o===!0,closeToTray:closeSetting===!0}).catch(()=>{});window.mainAPI.setDisplayWakeLock("
+  },
+  {
+    "id": "close-tray-provider-value",
+    "file": "@renderer:js",
+    "old": "[{{K}}.SCREENSHOT_NOTICE_LEAD]:Number(leadSetting)||{{Po}}[{{K}}.SCREENSHOT_NOTICE_LEAD],displays:",
+    "new": "[{{K}}.SCREENSHOT_NOTICE_LEAD]:Number(leadSetting)||{{Po}}[{{K}}.SCREENSHOT_NOTICE_LEAD],[{{K}}.CLOSE_TO_TRAY]:closeSetting??{{Po}}[{{K}}.CLOSE_TO_TRAY],displays:"
+  },
+  {
+    "id": "tray-update-setting",
+    "file": "@renderer:js",
+    "old": "else if(e==={{K}}.HIDE_FROM_TASK_BAR)await r.setValue({{gs}}.HideFromTaskBar,i);",
+    "new": "else if(e==={{K}}.HIDE_FROM_TASK_BAR){await r.setValue({{gs}}.HideFromTaskBar,i),await window.mainAPI.setTrayPreferences({minimizeToTray:i===!0})}else if(e==={{K}}.CLOSE_TO_TRAY){await r.setValue({{gs}}.CloseToTray,i),await window.mainAPI.setTrayPreferences({closeToTray:i===!0})}"
+  },
+  {
+    "id": "close-tray-ui-destructure",
+    "file": "@renderer:js",
+    "old": "screenshotNoticeLead:noticeLead,displays:L=[]}=e,",
+    "new": "screenshotNoticeLead:noticeLead,closeToTray:closeToTray,displays:L=[]}=e,"
+  },
+  {
+    "id": "close-tray-ui-row",
+    "file": "@renderer:js",
+    "old": "{section:`Screenshots`}",
+    "new": "{label:`Close button minimizes scrin.io to tray`,checked:closeToTray,onChange:e=>t({{K}}.CLOSE_TO_TRAY,e)},{section:`Screenshots`}"
+  }
+]

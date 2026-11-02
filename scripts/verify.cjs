@@ -41,6 +41,12 @@ const bundleFiles = [
   path.join(dir, "dist-main/main/utils/platform/desktopCapturerScreenshot.js"),
   path.join(dir, "dist-main/main/utils/screenshot/displayCrop.js"),
   path.join(dir, "dist-main/main/utils/screenshot/cropToDisplays.js"),
+  path.join(dir, "dist-main/main/utils/screenshot/sharpRuntime.js"),
+  path.join(dir, "dist-main/main/trayPreferences.js"),
+  path.join(dir, "dist-main/main/quitHandler.js"),
+  path.join(dir, "dist-main/main/minimizeHandler.js"),
+  path.join(dir, "dist-main/main/tray.js"),
+  path.join(dir, "dist-main/main/main.js"),
 ];
 
 const syntaxChecks = bundleFiles.map((file) => {
@@ -91,6 +97,21 @@ const staticChecks = [
   ["wake lock follows setting toggle", jsSrc.includes("setDisplayWakeLock(i===!1)")],
   ["wake lock applied on settings load", jsSrc.includes("setDisplayWakeLock((d??!0)===!1)")],
   ["css segmented rows fit four modes", cssSrc.includes("grid-auto-flow:column")],
+  ["close to tray setting default", jsSrc.includes("CLOSE_TO_TRAY]:!1")],
+  ["close to tray ui row", jsSrc.includes("{label:`Close button minimizes scrin.io to tray`,checked:closeToTray,")],
+  ["close to tray persisted", /setValue\([A-Za-z_$][\w$]*\.CloseToTray,i\)/.test(jsSrc)],
+  ["tray preferences pushed on settings load", jsSrc.includes("setTrayPreferences({minimizeToTray:o===!0,closeToTray:closeSetting===!0})")],
+  ["minimize toggle pushes tray preference", jsSrc.includes("setTrayPreferences({minimizeToTray:i===!0})")],
+  ["close toggle pushes tray preference", jsSrc.includes("setTrayPreferences({closeToTray:i===!0})")],
+  ["preload tray preferences bridge", preload.includes('setTrayPreferences: (preferences) => ipcInvoke("setTrayPreferences", preferences)')],
+  ["ipc tray preferences registered", /ipcMainHandle\("setTrayPreferences", \(preferences\) => \{\s*setTrayPreferences\(preferences\);/.test(mainFile("dist-main/main/registerIPCHandlers.js"))],
+  ["linux minimize to tray hides the window", /window\.setSkipTaskbar\(!isEnabled\);\s*if \(isLinux && !isEnabled\)\s*window\.hide\(\);/.test(mainFile("dist-main/main/registerIPCHandlers.js"))],
+  ["minimize events reach the renderer on linux", mainFile("dist-main/main/minimizeHandler.js").includes("if (!isWindows && !isLinux)")],
+  ["xwayland relaunch runs before the single instance lock", mainFile("dist-main/main/main.js").includes("const gotLock = !relaunchUnderXWaylandForTray() && app.requestSingleInstanceLock();")],
+  ["tray open restores a minimized window", mainFile("dist-main/main/tray.js").includes("if (mainWindow.isMinimized())\n                    mainWindow.restore();")],
+  ["tray quit reveals a hidden window first", /if \(mainWindow && !mainWindow\.isVisible\(\)\) \{\s*mainWindow\.show\(\);\s*mainWindow\.focus\(\);\s*\}\s*app\.quit\(\);/.test(mainFile("dist-main/main/tray.js"))],
+  ["sharp worker forks the resolved runtime", mainFile("dist-main/main/utils/screenshot/runSharpWorker.js").includes("execPath: runtime.execPath,")],
+  ["screenshot skips sharp without a runtime", mainFile("dist-main/main/utils/screenshot/takeScreenshot.js").includes("if (sharpHealthy !== true && !(await resolveSharpWorkerRuntime())) {")],
 ];
 
 const textSvg = [
@@ -419,6 +440,148 @@ const cropChecks = async () => {
   ];
 };
 
+const stubModules = (tmp, files) => {
+  for (const [rel, body] of Object.entries(files)) {
+    fs.mkdirSync(path.dirname(path.join(tmp, rel)), { recursive: true });
+    fs.writeFileSync(path.join(tmp, rel), body);
+  }
+};
+
+const electronLogStub = {
+  "node_modules/electron-log/package.json": JSON.stringify({ name: "electron-log", version: "0.0.0", main: "index.js" }),
+  "node_modules/electron-log/index.js": "const noop = () => {};\nmodule.exports = { info: noop, warn: noop, error: noop, debug: noop };",
+};
+
+const trayChecks = () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "tray-verify-"));
+  try {
+    stubModules(tmp, {
+      ...electronLogStub,
+      "node_modules/electron/package.json": JSON.stringify({ name: "electron", version: "0.0.0", main: "index.js" }),
+      "node_modules/electron/index.js": [
+        "const { EventEmitter } = require('events');",
+        "const app = new EventEmitter();",
+        "app.getPath = () => process.env.TRAY_USER_DATA;",
+        "app.quit = () => app.emit('before-quit');",
+        "exports.app = app;",
+        "exports.autoUpdater = new EventEmitter();",
+      ].join("\n"),
+      "utils/ipc.js": "export const sent = [];\nexport const ipcMainHandle = () => {};\nexport const ipcWebContentsSend = (key) => sent.push(key);",
+      "tray.js": "export const destroyTray = () => {};",
+      "run.mjs": [
+        'import { EventEmitter } from "node:events";',
+        'import { app } from "electron";',
+        'import { sent } from "./utils/ipc.js";',
+        'import { setupQuitHandler } from "./quitHandler.js";',
+        'import { getTrayPreferences, setTrayPreferences, needsXWaylandForTray } from "./trayPreferences.js";',
+        "const out = { loaded: getTrayPreferences() };",
+        "if (process.env.TRAY_PHASE === 'write') {",
+        "  out.merged = setTrayPreferences({ closeToTray: true });",
+        "  out.ignored = setTrayPreferences({ closeToTray: 'yes', minimizeToTray: 1 });",
+        "  out.both = setTrayPreferences({ minimizeToTray: true });",
+        "} else {",
+        "  const win = new EventEmitter();",
+        "  win.hidden = 0;",
+        "  win.hide = () => { win.hidden++; };",
+        "  win.webContents = {};",
+        "  setupQuitHandler(win);",
+        "  const close = () => { let prevented = false; win.emit('close', { preventDefault: () => { prevented = true; } }); return prevented; };",
+        "  setTrayPreferences({ closeToTray: false });",
+        "  out.offPrevented = close();",
+        "  out.offSent = sent.slice(); out.offHidden = win.hidden;",
+        "  setTrayPreferences({ closeToTray: true });",
+        "  out.onPrevented = close();",
+        "  out.onSent = sent.slice(); out.onHidden = win.hidden;",
+        "  app.quit();",
+        "  out.quitPrevented = close();",
+        "  out.quitSent = sent.slice(); out.quitHidden = win.hidden;",
+        "  out.afterQuitPrevented = close();",
+        "  out.afterQuitSent = sent.slice(); out.afterQuitHidden = win.hidden;",
+        "  const on = { minimizeToTray: true, closeToTray: false };",
+        "  const wayland = { XDG_SESSION_TYPE: 'wayland' };",
+        "  out.xwayland = [",
+        "    needsXWaylandForTray({ platform: 'linux', env: wayland, argv: ['scrinio'], preferences: on }),",
+        "    needsXWaylandForTray({ platform: 'linux', env: wayland, argv: ['scrinio', '--ozone-platform=x11'], preferences: on }),",
+        "    needsXWaylandForTray({ platform: 'linux', env: wayland, argv: ['scrinio', '--ozone-platform-hint=wayland'], preferences: on }),",
+        "    needsXWaylandForTray({ platform: 'linux', env: { XDG_SESSION_TYPE: 'x11' }, argv: ['scrinio'], preferences: on }),",
+        "    needsXWaylandForTray({ platform: 'linux', env: wayland, argv: ['scrinio'], preferences: { minimizeToTray: false } }),",
+        "    needsXWaylandForTray({ platform: 'win32', env: wayland, argv: ['scrinio'], preferences: on }),",
+        "  ];",
+        "}",
+        "console.log(JSON.stringify(out));",
+      ].join("\n"),
+    });
+    fs.copyFileSync(path.join(dir, "dist-main/main/quitHandler.js"), path.join(tmp, "quitHandler.js"));
+    fs.copyFileSync(path.join(dir, "dist-main/main/trayPreferences.js"), path.join(tmp, "trayPreferences.js"));
+    fs.writeFileSync(path.join(tmp, "package.json"), JSON.stringify({ type: "module" }));
+    const userData = path.join(tmp, "user-data");
+    const runPhase = (phase) =>
+      JSON.parse(
+        execFileSync(process.execPath, ["run.mjs"], { cwd: tmp, encoding: "utf8", env: { ...process.env, TRAY_USER_DATA: userData, TRAY_PHASE: phase } })
+          .trim()
+          .split("\n")
+          .pop()
+      );
+    const fresh = runPhase("write");
+    const stored = runPhase("read");
+    const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    console.log("  tray preferences: " + JSON.stringify({ fresh, stored }));
+    return [
+      ["tray preferences default to off", same(fresh.loaded, { minimizeToTray: false, closeToTray: false })],
+      ["tray preferences merge partial updates", same(fresh.merged, { minimizeToTray: false, closeToTray: true }) && same(fresh.both, { minimizeToTray: true, closeToTray: true })],
+      ["tray preferences ignore non-boolean values", same(fresh.ignored, { minimizeToTray: false, closeToTray: true })],
+      ["tray preferences survive a restart", same(stored.loaded, { minimizeToTray: true, closeToTray: true })],
+      ["close asks for quit confirmation when close to tray is off", stored.offPrevented && same(stored.offSent, ["quitApp"]) && stored.offHidden === 0],
+      ["close hides to tray when close to tray is on", stored.onPrevented && same(stored.onSent, ["quitApp"]) && stored.onHidden === 1],
+      ["quit from the tray still reaches the quit flow", stored.quitPrevented && same(stored.quitSent, ["quitApp", "quitApp"]) && stored.quitHidden === 1],
+      ["window close hides again after a cancelled quit", stored.afterQuitPrevented && same(stored.afterQuitSent, ["quitApp", "quitApp"]) && stored.afterQuitHidden === 2],
+      ["xwayland only for minimize to tray on a wayland session without an ozone override", same(stored.xwayland, [true, false, false, false, false, false])],
+    ];
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+};
+
+const sharpRuntimeChecks = async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "sharp-runtime-verify-"));
+  try {
+    stubModules(tmp, electronLogStub);
+    fs.copyFileSync(path.join(dir, "dist-main/main/utils/screenshot/sharpRuntime.js"), path.join(tmp, "sharpRuntime.mjs"));
+    const { pathToFileURL } = require("url");
+    const rt = await import(pathToFileURL(path.join(tmp, "sharpRuntime.mjs")).href);
+    const worker = "/opt/scrinio/resources/app.asar/dist-main/main/utils/screenshot/sharpWorker.js";
+    const unpackedWorker = "/opt/scrinio/resources/app.asar.unpacked/dist-main/main/utils/screenshot/sharpWorker.js";
+    const unpackedSharp = "/opt/scrinio/resources/app.asar.unpacked/node_modules/sharp/package.json";
+    const disk = (extra) => new Set([unpackedWorker, unpackedSharp, ...extra]);
+    const find = (opts) =>
+      rt.findSharpWorkerRuntime({
+        platform: "linux",
+        workerPath: worker,
+        env: { PATH: "/a/bin:relative/bin:/b/bin" },
+        ...opts,
+      });
+    const versions = { "/a/bin/node": "18.20.4", "/b/bin/node": "24.18.0", "/usr/bin/node": "22.12.0" };
+    const probe = async (candidate) => versions[candidate] ?? null;
+    const picked = await find({ exists: (p) => disk(["/a/bin/node", "/b/bin/node", "/usr/bin/node"]).has(p), probe });
+    const skipsBroken = await find({ exists: (p) => disk(["/b/bin/node", "/usr/bin/node"]).has(p), probe: async (c) => (c === "/b/bin/node" ? null : versions[c]) });
+    const none = await find({ exists: (p) => disk(["/a/bin/node"]).has(p), probe });
+    const noUnpacked = await find({ exists: (p) => p !== unpackedSharp, probe });
+    const mac = await rt.findSharpWorkerRuntime({ platform: "darwin", workerPath: worker });
+    const gate = ["20.18.3", "20.19.0", "21.7.3", "22.6.0", "22.7.0", "v24.18.0", "26.13.0"].map(rt.supportsTypelessEsm);
+    return [
+      ["sharp runtime picks the first system node that runs the worker", picked && picked.execPath === "/b/bin/node" && picked.workerPath === unpackedWorker],
+      ["sharp runtime skips a node that fails to answer", skipsBroken && skipsBroken.execPath === "/usr/bin/node"],
+      ["sharp runtime gives up without a usable node", none === null],
+      ["sharp runtime gives up without unpacked sharp", noUnpacked === null],
+      ["sharp runtime ignores relative PATH entries", !rt.nodeCandidates({ PATH: "relative/bin:/x" }).includes(path.join("relative/bin", "node"))],
+      ["sharp runtime keeps the electron fork off linux", mac.execPath === undefined && mac.workerPath === worker],
+      ["sharp runtime node version gate", JSON.stringify(gate) === JSON.stringify([false, true, false, false, true, true, true])],
+    ];
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+};
+
 const run = async () => {
   const checks = [...syntaxChecks, ...staticChecks];
   try {
@@ -451,6 +614,20 @@ const run = async () => {
   } catch (error) {
     console.log("FAIL monitor crop harness: " + error.message);
     checks.push(["monitor crop harness executed", false]);
+  }
+
+  try {
+    checks.push(...trayChecks());
+  } catch (error) {
+    console.log("FAIL tray harness: " + error.message);
+    checks.push(["tray harness executed", false]);
+  }
+
+  try {
+    checks.push(...(await sharpRuntimeChecks()));
+  } catch (error) {
+    console.log("FAIL sharp runtime harness: " + error.message);
+    checks.push(["sharp runtime harness executed", false]);
   }
 
   let bad = 0;

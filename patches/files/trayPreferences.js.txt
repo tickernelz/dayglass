@@ -1,0 +1,48 @@
+import fs from "node:fs";
+import path from "node:path";
+import { app } from "electron";
+import log from "electron-log";
+const KEYS = ["minimizeToTray", "closeToTray"];
+let current = null;
+const preferencesFile = () => path.join(app.getPath("userData"), "tray-preferences.json");
+const normalize = (value) => Object.fromEntries(KEYS.map((key) => [key, value?.[key] === true]));
+const load = () => {
+    try {
+        return normalize(JSON.parse(fs.readFileSync(preferencesFile(), "utf8")));
+    }
+    catch {
+        return normalize(null);
+    }
+};
+export const getTrayPreferences = () => (current ??= load());
+export const setTrayPreferences = (update) => {
+    const previous = getTrayPreferences();
+    const next = { ...previous };
+    for (const key of KEYS) {
+        if (typeof update?.[key] === "boolean")
+            next[key] = update[key];
+    }
+    current = next;
+    if (KEYS.every((key) => next[key] === previous[key]) && fs.existsSync(preferencesFile()))
+        return next;
+    try {
+        fs.mkdirSync(path.dirname(preferencesFile()), { recursive: true });
+        fs.writeFileSync(preferencesFile(), JSON.stringify(next));
+    }
+    catch (error) {
+        log.warn("[Tray] Failed to store tray preferences", error);
+    }
+    return next;
+};
+export const needsXWaylandForTray = ({ platform = process.platform, env = process.env, argv = process.argv, preferences = getTrayPreferences(), } = {}) => platform === "linux" &&
+    env.XDG_SESSION_TYPE === "wayland" &&
+    !argv.some((arg) => arg.startsWith("--ozone-platform")) &&
+    preferences.minimizeToTray;
+export const relaunchUnderXWaylandForTray = () => {
+    if (!needsXWaylandForTray())
+        return false;
+    log.info("[Tray] Minimize to tray is on in a Wayland session; relaunching through XWayland");
+    app.relaunch({ args: [...process.argv.slice(1), "--ozone-platform=x11"] });
+    app.exit(0);
+    return true;
+};

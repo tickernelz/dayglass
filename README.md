@@ -19,6 +19,8 @@ The source archives live in this repository under `sources/`, stored as masked c
 | Screenshot privacy | Settings gains a privacy control that masks every captured frame before it leaves the main process: `off`, `blur`, `mosaic`, or `text` (crisp edges, unreadable glyphs) |
 | Screenshot notice | A native notification warns that a capture is about to happen, then confirms once it was taken. Both sides are configurable in Settings: `off`, `before`, `after`, or `both`, with a warning lead time of 5, 10, 15, or 30 seconds |
 | Settings layout | The settings panel is regrouped into General, Screenshots, and Idle sections |
+| Tray | Settings gains "Close button minimizes scrin.io to tray": closing the window hides it to the tray, and Quit in the tray menu still quits. On Linux, "Minimize button minimizes scrin.io to tray" hides the window instead of only dropping its taskbar entry. A Wayland compositor never tells a native Wayland window that it was minimized, so while that option is on a Wayland session starts the app through XWayland (`--ozone-platform=x11`); the switch takes effect from the next start, and an explicit `--ozone-platform` flag always wins |
+| Image compression on Linux | Electron loads the system GLib, and the GLib bundled with sharp's libvips crashes inside it. The sharp worker therefore runs on the system `node` (20.19+ or 22.7+, from `PATH`, `/usr/bin`, `/usr/local/bin`, or Homebrew) out of `app.asar.unpacked`; without one, screenshots go straight to the built-in JPEG encoder |
 
 Everything else keeps working: screenshots, activity sync, task notes, hotkeys, tray behavior, and sign-in.
 
@@ -36,6 +38,8 @@ patches/                  declarative patch definitions
   04-privacy-wakelock.main.json    wake-lock module, privacy transforms, capture options, IPC
   05-privacy-wakelock.renderer.json privacy setting, privacy control, wake-lock wiring
   07-monitor-crop.main.json       Linux crop of whole-desktop frames to the chosen monitors
+  08-tray-sharp.main.json         tray preferences, close/minimize to tray, XWayland relaunch, sharp worker runtime
+  09-tray.renderer.json           close-to-tray setting and tray preference sync
   files/                  whole-file sources copied into the application tree
   10-liberal.main.json    main-process patches
   11-liberal.renderer.json renderer patches
