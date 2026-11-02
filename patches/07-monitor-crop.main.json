@@ -1,0 +1,26 @@
+[
+  {
+    "id": "display-crop-module",
+    "file": "dist-main/main/utils/screenshot/displayCrop.js",
+    "mode": "write",
+    "from": "files/displayCrop.js.txt"
+  },
+  {
+    "id": "crop-to-displays-module",
+    "file": "dist-main/main/utils/screenshot/cropToDisplays.js",
+    "mode": "write",
+    "from": "files/cropToDisplays.js.txt"
+  },
+  {
+    "id": "linux-crop-import",
+    "file": "dist-main/main/utils/platform/LinuxStrategy.js",
+    "old": "import { takeScreenshotWithDesktopCapturer } from \"./desktopCapturerScreenshot.js\";\n",
+    "new": "import { takeScreenshotWithDesktopCapturer } from \"./desktopCapturerScreenshot.js\";\nimport { cropToDisplays, wantsDisplaySubset } from \"../screenshot/cropToDisplays.js\";\n"
+  },
+  {
+    "id": "linux-crop-backends",
+    "file": "dist-main/main/utils/platform/LinuxStrategy.js",
+    "old": "                    const res = await backend.run();\n                    if (res && res.length > 0) {",
+    "new": "                    const raw = await backend.run();\n                    const res = raw && raw.length > 0 && backend.name !== \"desktopCapturer\" && wantsDisplaySubset({ onlyPrimaryScreen, displayIds })\n                        ? cropToDisplays(raw, { onlyPrimaryScreen, displayIds })\n                        : raw;\n                    if (res && res.length > 0) {"
+  }
+]

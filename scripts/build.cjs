@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 const { execFileSync } = require("child_process");
 const { CFG, fetchAsset } = require("./fetch.cjs");
 
@@ -111,27 +112,56 @@ const packAsar = (appDir, asarPath) => {
   runAsar(["pack", appDir, asarPath, "--unpack-dir", "node_modules/@img"]);
 };
 
-const readControl = (debPath) => {
-  const tmp = path.join(WORK, "control-probe");
+const readDeb = (debPath) => {
+  const tmp = path.join(WORK, "deb-probe");
   rm(tmp);
   mkdir(tmp);
-  run("ar", ["x", debPath], { cwd: tmp });
-  const controlTar = fs.readdirSync(tmp).find((f) => /^control\.tar\./.test(f));
-  if (!controlTar) throw new Error("control tarball missing in " + path.basename(debPath));
-  mkdir(path.join(tmp, "control"));
-  run("tar", ["-xf", path.join(tmp, controlTar), "-C", path.join(tmp, "control")]);
-  const body = fs.readFileSync(path.join(tmp, "control", "control"), "utf8");
+  run("ar", ["x", path.resolve(debPath)], { cwd: tmp });
+  const parts = fs.readdirSync(tmp);
+  const controlTar = parts.find((f) => /^control\.tar\./.test(f));
+  const dataTar = parts.find((f) => /^data\.tar\./.test(f));
+  if (!controlTar || !dataTar) throw new Error("control or data tarball missing in " + path.basename(debPath));
+  const controlDir = path.join(tmp, "control");
+  mkdir(controlDir);
+  run("tar", ["-xf", path.join(tmp, controlTar), "-C", controlDir]);
+  const md5Path = path.join(controlDir, "md5sums");
+  const listing = execFileSync("tar", ["--numeric-owner", "-tvf", path.join(tmp, dataTar)], { encoding: "utf8", maxBuffer: 256 * 1024 * 1024 });
+  const members = listing
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      const m = /^(\S+)\s+(\S+)\s+\d+\s+\S+\s+\S+\s+(.+)$/.exec(line);
+      if (!m) throw new Error("unreadable data member: " + line);
+      return { mode: m[1], owner: m[2], name: m[1].startsWith("l") ? m[3].replace(/ -> .*$/, "") : m[3] };
+    });
+  const deb = {
+    control: fs.readFileSync(path.join(controlDir, "control"), "utf8"),
+    md5sums: fs.existsSync(md5Path) ? fs.readFileSync(md5Path, "utf8").split("\n").filter(Boolean) : [],
+    members,
+  };
   rm(tmp);
-  return body;
+  return deb;
 };
 
 const assertDebIdentity = (debPath, identity) => {
-  const control = readControl(debPath);
+  const { control, md5sums, members } = readDeb(debPath);
   const pkg = /^Package:\s*(.+)$/m.exec(control);
   if (!pkg || pkg[1].trim() !== identity) throw new Error("artifact package name is " + (pkg && pkg[1]) + ", expected " + identity);
   const version = /^Version:\s*(.+)$/m.exec(control);
   if (!version || version[1].trim() !== CFG.buildVersion) throw new Error("artifact version is " + (version && version[1]) + ", expected " + CFG.buildVersion);
-  console.log("  identity package=" + pkg[1].trim() + " version=" + version[1].trim());
+  const appPrefix = "./opt/" + identity;
+  const misplaced = members.find((m) => !(m.name === "./" || m.name === "./opt/" || m.name === appPrefix + "/" || m.name.startsWith(appPrefix + "/") || m.name.startsWith("./usr/")));
+  if (misplaced) throw new Error("deb member " + misplaced.name + " is outside " + appPrefix + " and ./usr");
+  const foreign = members.find((m) => m.owner !== "0/0");
+  if (foreign) throw new Error("deb member " + foreign.name + " is owned by " + foreign.owner + ", expected 0/0");
+  const sandbox = members.find((m) => m.name === appPrefix + "/chrome-sandbox");
+  if (!sandbox || !sandbox.mode.startsWith("-rws")) throw new Error("chrome-sandbox is " + (sandbox ? sandbox.mode : "missing") + ", expected setuid");
+  const launcher = members.find((m) => m.name === "./usr/bin/" + identity);
+  if (!launcher || !launcher.mode.startsWith("l")) throw new Error("/usr/bin/" + identity + " link missing from the deb");
+  const files = members.filter((m) => m.mode.startsWith("-")).length;
+  const stale = md5sums.find((line) => !line.includes("  opt/" + identity + "/") && !line.includes("  usr/"));
+  if (stale || md5sums.length !== files) throw new Error("md5sums lists " + md5sums.length + " files for " + files + " payload files" + (stale ? ", including " + stale : ""));
+  console.log("  identity package=" + pkg[1].trim() + " version=" + version[1].trim() + " files=" + files + " root=" + appPrefix.slice(1));
 };
 
 const assertZipIdentity = (zipPath, bundle) => {
@@ -141,16 +171,17 @@ const assertZipIdentity = (zipPath, bundle) => {
 };
 
 const assertRpmIdentity = (rpmPath, identity) => {
-  const name = execFileSync("rpm", ["-qp", "--queryformat", "%{NAME}", rpmPath], { encoding: "utf8" }).trim();
+  const [name, version] = execFileSync("rpm", ["-qp", "--queryformat", "%{NAME} %{VERSION}", rpmPath], { encoding: "utf8" }).trim().split(" ");
   if (name !== identity) throw new Error("artifact package name is " + name + ", expected " + identity);
-  console.log("  identity package=" + name + " (rpm)");
+  if (version !== CFG.version) throw new Error("artifact version is " + version + ", expected " + CFG.version);
+  console.log("  identity package=" + name + " version=" + version + " (rpm)");
 };
 
 const repackRpm = (target, out, meta) => {
   const identity = CFG.identity.linux;
   const rpmArch = target.arch === "amd64" ? "x86_64" : target.arch === "arm64" ? "aarch64" : target.arch;
   const rpmVersion = CFG.version;
-  const rpmRelease = (CFG.releaseSuffix || "1").replace(/-/g, ".");
+  const rpmRelease = CFG.releaseSuffix ? "1." + CFG.releaseSuffix.replace(/-/g, ".") : "1";
 
   const topdir = path.join(WORK, "rpmbuild-" + target.arch);
   rm(topdir);
@@ -175,7 +206,7 @@ const repackRpm = (target, out, meta) => {
     "Summary: " + identity + " time tracking client (patched build)",
     "License: " + (meta.license || "Proprietary"),
     "URL: " + (meta.homepage || "https://" + CFG.identity.appId + "/"),
-    "Requires: gtk3, nss, alsa-lib, libnotify, libsecret, libXScrnSaver, libXtst",
+    "Requires: gtk3, nss, alsa-lib, libnotify, libsecret, libXScrnSaver, libXtst, libuuid, at-spi2-core, xdg-utils",
     "Recommends: flameshot, grim, gnome-screenshot, scrot, xdg-desktop-portal, xdg-desktop-portal-wlr, xdg-desktop-portal-gnome",
     "",
     "%description",
@@ -184,24 +215,14 @@ const repackRpm = (target, out, meta) => {
     "%install",
     "mkdir -p %{buildroot}",
     "cp -a " + dataDir + "/* %{buildroot}/",
-    "",
-    "%post",
-    "if [ -d /opt/" + identity + " ]; then",
-    "    if [ ! -L /usr/bin/" + identity + " ]; then",
-    "        ln -sf /opt/" + identity + "/" + identity + " /usr/bin/" + identity,
-    "    fi",
-    "fi",
-    "",
-    "%postun",
-    "if [ \"$1\" = \"0\" ]; then",
-    "    rm -f /usr/bin/" + identity,
-    "fi",
+    "chmod 4755 %{buildroot}/opt/" + identity + "/chrome-sandbox",
     "",
     "%files",
     "/opt/" + identity,
+    "/usr/bin/" + identity,
     "/usr/share/applications/" + identity + ".desktop",
     "/usr/share/icons/hicolor/*/apps/" + identity + ".png",
-    "/usr/share/doc/" + identity + "/*",
+    "/usr/share/doc/" + identity,
     "",
   ].join("\n");
 
@@ -219,6 +240,19 @@ const repackRpm = (target, out, meta) => {
   assertRpmIdentity(finalPath, identity);
   rm(topdir);
   return finalPath;
+};
+
+const md5Sums = (root) => {
+  const lines = [];
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.isFile()) lines.push(crypto.createHash("md5").update(fs.readFileSync(full)).digest("hex") + "  " + path.relative(root, full).split(path.sep).join("/"));
+    }
+  };
+  walk(root);
+  return lines.join("\n") + "\n";
 };
 
 const repackDeb = (target, out, meta) => {
@@ -250,6 +284,13 @@ const repackDeb = (target, out, meta) => {
     }
   }
 
+  const dataDir = path.join(out, "data");
+  fs.chmodSync(path.join(optDir, identity, "chrome-sandbox"), 0o4755);
+  const launcher = path.join(dataDir, "usr", "bin", identity);
+  mkdir(path.dirname(launcher));
+  rm(launcher);
+  fs.symlinkSync("/opt/" + identity + "/" + identity, launcher);
+
   const controlDir = path.join(out, "control");
   rm(controlDir);
   mkdir(controlDir);
@@ -271,10 +312,14 @@ const repackDeb = (target, out, meta) => {
       .join("\n");
     fs.writeFileSync(controlFile, body);
   }
+  rm(path.join(controlDir, "postinst"));
+  rm(path.join(controlDir, "postrm"));
+  fs.writeFileSync(path.join(controlDir, "md5sums"), md5Sums(dataDir));
+  const rootOwned = ["--owner=0", "--group=0", "--numeric-owner"];
   rm(path.join(out, "control.tar.xz"));
-  run("tar", ["-cJf", path.join(out, "control.tar.xz"), "-C", controlDir, "."]);
+  run("tar", [...rootOwned, "-cJf", path.join(out, "control.tar.xz"), "-C", controlDir, "."]);
   rm(path.join(out, "data.tar.xz"));
-  run("tar", ["-cJf", path.join(out, "data.tar.xz"), "-C", out, "data"]);
+  run("tar", [...rootOwned, "-cJf", path.join(out, "data.tar.xz"), "-C", dataDir, "."]);
   const debianBinary = path.join(out, "debian-binary");
   if (!fs.existsSync(debianBinary)) fs.writeFileSync(debianBinary, "2.0\n");
   const finalName = CFG.publicName + "_" + CFG.buildVersion + "_" + target.arch + ".deb";

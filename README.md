@@ -13,7 +13,7 @@ The source archives live in this repository under `sources/`, stored as masked c
 | Process scanning | Local background-process inspection returns an empty result and never runs |
 | Telemetry upload | The periodic reporting of detected processes is removed |
 | Auto-update | Update checks and installer handoff are disabled; a build stays on the version you installed |
-| Monitor selection | Settings gains a screenshot scope control: all monitors, primary only, or a picked subset |
+| Monitor selection | Settings gains a screenshot scope control: all monitors, primary only, or a picked subset. On Linux, a frame from a whole-desktop tool (spectacle, grim, gnome-screenshot, flameshot, scrot) is cropped to the chosen monitors; a frame that does not match the monitor layout is dropped and the next tool is tried |
 | Idle detection | Settings gains an idle-detection switch; when off, idle time is neither tracked nor reported |
 | Display sleep | While idle detection is off, the display is held awake through a `prevent-display-sleep` blocker so the machine never sleeps the screen out from under a tracked session |
 | Screenshot privacy | Settings gains a privacy control that masks every captured frame before it leaves the main process: `off`, `blur`, `mosaic`, or `text` (crisp edges, unreadable glyphs) |
@@ -35,6 +35,7 @@ patches/                  declarative patch definitions
   03-monitor-idle.css.txt appended stylesheet block
   04-privacy-wakelock.main.json    wake-lock module, privacy transforms, capture options, IPC
   05-privacy-wakelock.renderer.json privacy setting, privacy control, wake-lock wiring
+  07-monitor-crop.main.json       Linux crop of whole-desktop frames to the chosen monitors
   files/                  whole-file sources copied into the application tree
   10-liberal.main.json    main-process patches
   11-liberal.renderer.json renderer patches
@@ -74,6 +75,8 @@ dayglass-<version>-win-x64.exe
 
 `<version>` is the upstream version plus this build's own suffix, so a patched artifact never claims to be the upstream release it was cut from. With `"version": "6.23.0"` and `"releaseSuffix": "liberal.3"` in `config/release.json`, the artifact is `dayglass_6.23.0-liberal.3_amd64.deb`. The suffix is what changes when this repository ships a new patch set against the same upstream version; the leading version tracks the application source and only moves when `sources/` moves.
 
+RPM cannot carry a hyphen inside `Version`, so the rpm is `scrinio-6.23.0-1.liberal.3`: `Version` is the upstream version and `Release` is `1.` plus the suffix. The leading `1` makes rpm sort it above a plain `6.23.0-1` package of the same name; a bare `liberal.3` would sort below it.
+
 ## Public name and installed identity
 
 `config/release.json` separates the two, and nothing else is allowed to blur them:
@@ -86,7 +89,9 @@ dayglass-<version>-win-x64.exe
 | `identity.win` | Windows executable, product name, and shortcut name | `scrin.io` |
 | `identity.appId` | NSIS app id and deb vendor | `scrin.io` |
 
-Every artifact is checked against its identity after repacking: a deb whose `Package:` or `Version:` disagrees, an rpm whose package name disagrees, a zip without `scrin.io.app/Contents/MacOS`, or a Windows payload without `scrin.io.exe` fails the build instead of shipping. That check exists because a renamed payload installs fine and then leaves a dead shortcut behind.
+Every artifact is checked against its identity after repacking: a deb whose `Package:` or `Version:` disagrees, whose payload is not rooted at `./opt/scrinio` and `./usr` with root ownership, whose `chrome-sandbox` is not setuid, whose `/usr/bin/scrinio` link is missing, or whose `md5sums` does not cover the payload, an rpm whose package name or version disagrees, a zip without `scrin.io.app/Contents/MacOS`, or a Windows payload without `scrin.io.exe` fails the build instead of shipping. That check exists because a renamed payload installs fine and then leaves a dead shortcut behind.
+
+Both Linux packages carry the setuid `chrome-sandbox` and the `/usr/bin/scrinio` link as packaged files, with no install scripts. Debs up to `liberal.5` were rooted at `data/`, so they installed to `/data/opt/scrinio` and the desktop entry pointed at nothing; installing this deb over one of them upgrades it in place and removes `/data/opt/scrinio`.
 
 An earlier build renamed the installed identity to match the public name, so a machine carrying that build has a package called `dayglass` and a desktop entry pointing at a directory that no longer exists. Installing this build is a separate package, not an upgrade: remove the old one first (`sudo apt remove dayglass` or `sudo dnf remove dayglass` on Linux, uninstall from Apps on Windows) before installing `scrinio`.
 
@@ -145,7 +150,7 @@ git tag v6.23.0-liberal.1
 git push origin v6.23.0-liberal.1
 ```
 
-The tag builds every target in the matrix, attaches the five artifacts to the release, and is the only supported way to publish. `workflow_dispatch` runs the matrix without a release, which is the cheap way to check an anchor change before tagging.
+The tag builds every target in the matrix, attaches the seven artifacts to the release, and is the only supported way to publish. `workflow_dispatch` runs the matrix without a release, which is the cheap way to check an anchor change before tagging.
 
 Windows installers are unsigned. macOS bundles are unsigned and not notarized, so the first launch requires the usual override in System Settings. Linux packages install normally.
 

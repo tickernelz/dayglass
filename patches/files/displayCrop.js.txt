@@ -1,0 +1,29 @@
+export const pickDisplays = (displays, primaryId, options = {}) => {
+    const { onlyPrimaryScreen = false, displayIds = [] } = options;
+    if (onlyPrimaryScreen)
+        return displays.filter((display) => String(display.id) === String(primaryId));
+    const wanted = (Array.isArray(displayIds) ? displayIds : []).map((id) => String(id));
+    return displays.filter((display) => wanted.includes(String(display.id)));
+};
+export const cropRects = (displays, picked, width, height) => {
+    if (displays.length === 0 || picked.length === 0)
+        return null;
+    const minX = Math.min(...displays.map((d) => d.bounds.x));
+    const minY = Math.min(...displays.map((d) => d.bounds.y));
+    const maxX = Math.max(...displays.map((d) => d.bounds.x + d.bounds.width));
+    const maxY = Math.max(...displays.map((d) => d.bounds.y + d.bounds.height));
+    const scaleX = width / (maxX - minX);
+    const scaleY = height / (maxY - minY);
+    if (!(scaleX > 0) || !(scaleY > 0) || Math.abs(scaleX - scaleY) > scaleX * 0.01)
+        return null;
+    return picked.map((d) => {
+        const x = Math.round((d.bounds.x - minX) * scaleX);
+        const y = Math.round((d.bounds.y - minY) * scaleY);
+        return {
+            x,
+            y,
+            width: Math.min(width - x, Math.round(d.bounds.width * scaleX)),
+            height: Math.min(height - y, Math.round(d.bounds.height * scaleY)),
+        };
+    });
+};

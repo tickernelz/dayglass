@@ -39,6 +39,8 @@ const bundleFiles = [
   path.join(dir, "dist-main/main/utils/platform/MacStrategy.js"),
   path.join(dir, "dist-main/main/utils/platform/LinuxStrategy.js"),
   path.join(dir, "dist-main/main/utils/platform/desktopCapturerScreenshot.js"),
+  path.join(dir, "dist-main/main/utils/screenshot/displayCrop.js"),
+  path.join(dir, "dist-main/main/utils/screenshot/cropToDisplays.js"),
 ];
 
 const syntaxChecks = bundleFiles.map((file) => {
@@ -385,6 +387,38 @@ const wakeLockChecks = () => {
   }
 };
 
+const cropChecks = async () => {
+  const { pathToFileURL } = require("url");
+  const { pickDisplays, cropRects } = await import(pathToFileURL(path.join(dir, "dist-main/main/utils/screenshot/displayCrop.js")).href);
+  const side = [
+    { id: 11, bounds: { x: 1920, y: 0, width: 1920, height: 1080 } },
+    { id: 22, bounds: { x: 0, y: 0, width: 1920, height: 1080 } },
+  ];
+  const stacked = [
+    { id: 1, bounds: { x: 0, y: 0, width: 2560, height: 1440 } },
+    { id: 2, bounds: { x: 320, y: 1440, width: 1920, height: 1080 } },
+  ];
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const rightOnly = cropRects(side, pickDisplays(side, 11, { displayIds: ["11"] }), 3840, 1080);
+  const primaryOnly = cropRects(side, pickDisplays(side, 11, { onlyPrimaryScreen: true, displayIds: ["22"] }), 3840, 1080);
+  const hidpi = cropRects(side, pickDisplays(side, 11, { displayIds: ["22"] }), 7680, 2160);
+  const lower = cropRects(stacked, pickDisplays(stacked, 1, { displayIds: [2] }), 2560, 2520);
+  const both = cropRects(side, pickDisplays(side, 11, { displayIds: ["11", "22"] }), 3840, 1080);
+  const crop = mainFile("dist-main/main/utils/screenshot/cropToDisplays.js");
+  const linux = mainFile("dist-main/main/utils/platform/LinuxStrategy.js");
+  return [
+    ["crop picks the selected monitor out of a side-by-side frame", same(rightOnly, [{ x: 1920, y: 0, width: 1920, height: 1080 }])],
+    ["crop honours primary-only over the picked list", same(primaryOnly, [{ x: 1920, y: 0, width: 1920, height: 1080 }])],
+    ["crop scales with a HiDPI frame", same(hidpi, [{ x: 0, y: 0, width: 3840, height: 2160 }])],
+    ["crop handles stacked, offset monitors", same(lower, [{ x: 320, y: 1440, width: 1920, height: 1080 }])],
+    ["crop returns one region per picked monitor", both !== null && both.length === 2],
+    ["crop refuses a frame that does not match the layout", cropRects(side, [side[0]], 1920, 1080) === null],
+    ["crop selects nothing for an unknown monitor", pickDisplays(side, 11, { displayIds: ["99"] }).length === 0],
+    ["crop drops the frame when no picked monitor is connected", crop.includes("none of the selected displays is connected")],
+    ["linux whole-desktop backends are cropped to the selection", linux.includes("cropToDisplays(raw, { onlyPrimaryScreen, displayIds })") && linux.includes("backend.name !== \"desktopCapturer\"")],
+  ];
+};
+
 const run = async () => {
   const checks = [...syntaxChecks, ...staticChecks];
   try {
@@ -410,6 +444,13 @@ const run = async () => {
   } catch (error) {
     console.log("FAIL wake lock state machine: " + error.message);
     checks.push(["wake lock state machine executed", false]);
+  }
+
+  try {
+    checks.push(...(await cropChecks()));
+  } catch (error) {
+    console.log("FAIL monitor crop harness: " + error.message);
+    checks.push(["monitor crop harness executed", false]);
   }
 
   let bad = 0;
