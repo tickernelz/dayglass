@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import fs from "node:fs";
-import path from "node:path";
+import { posix as path } from "node:path";
 import { fileURLToPath } from "node:url";
 import log from "electron-log";
 const WELL_KNOWN_NODES = ["/usr/bin/node", "/usr/local/bin/node", "/home/linuxbrew/.linuxbrew/bin/node"];
@@ -11,7 +11,7 @@ export const supportsTypelessEsm = (version) => {
 export const unpackedPath = (file) => file.replace(/([\\/])app\.asar([\\/])/, "$1app.asar.unpacked$2");
 export const nodeCandidates = (env) => [
     ...new Set([
-        ...(env.PATH || "").split(path.delimiter).filter((dir) => path.isAbsolute(dir)).map((dir) => path.join(dir, "node")),
+        ...(env.PATH || "").split(":").filter((dir) => path.isAbsolute(dir)).map((dir) => path.join(dir, "node")),
         ...WELL_KNOWN_NODES,
     ]),
 ];

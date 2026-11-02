@@ -36,10 +36,16 @@
     "new": "[{{K}}.SCREENSHOT_NOTICE_LEAD]:Number(leadSetting)||{{Po}}[{{K}}.SCREENSHOT_NOTICE_LEAD],[{{K}}.CLOSE_TO_TRAY]:closeSetting??{{Po}}[{{K}}.CLOSE_TO_TRAY],displays:"
   },
   {
-    "id": "tray-update-setting",
+    "id": "minimize-tray-update-setting",
     "file": "@renderer:js",
-    "old": "else if(e==={{K}}.HIDE_FROM_TASK_BAR)await r.setValue({{gs}}.HideFromTaskBar,i);",
-    "new": "else if(e==={{K}}.HIDE_FROM_TASK_BAR){await r.setValue({{gs}}.HideFromTaskBar,i),await window.mainAPI.setTrayPreferences({minimizeToTray:i===!0})}else if(e==={{K}}.CLOSE_TO_TRAY){await r.setValue({{gs}}.CloseToTray,i),await window.mainAPI.setTrayPreferences({closeToTray:i===!0})}"
+    "old": "else if(e==={{K}}.HIDE_FROM_TASK_BAR)await r.setValue({{gs}}.HideFromTaskBar,i)",
+    "new": "else if(e==={{K}}.HIDE_FROM_TASK_BAR)await window.mainAPI.setTrayPreferences({minimizeToTray:i===!0}),await r.setValue({{gs}}.HideFromTaskBar,i)"
+  },
+  {
+    "id": "close-tray-update-setting",
+    "file": "@renderer:js",
+    "old": "else if(e==={{K}}.ONLY_PRIMARY_SCREEN){",
+    "new": "else if(e==={{K}}.CLOSE_TO_TRAY){await r.setValue({{gs}}.CloseToTray,i),await window.mainAPI.setTrayPreferences({closeToTray:i===!0})}else if(e==={{K}}.ONLY_PRIMARY_SCREEN){"
   },
   {
     "id": "close-tray-ui-destructure",

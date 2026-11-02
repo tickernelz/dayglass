@@ -573,7 +573,7 @@ const sharpRuntimeChecks = async () => {
       ["sharp runtime skips a node that fails to answer", skipsBroken && skipsBroken.execPath === "/usr/bin/node"],
       ["sharp runtime gives up without a usable node", none === null],
       ["sharp runtime gives up without unpacked sharp", noUnpacked === null],
-      ["sharp runtime ignores relative PATH entries", !rt.nodeCandidates({ PATH: "relative/bin:/x" }).includes(path.join("relative/bin", "node"))],
+      ["sharp runtime ignores relative PATH entries", !rt.nodeCandidates({ PATH: "relative/bin:/x" }).includes("relative/bin/node")],
       ["sharp runtime keeps the electron fork off linux", mac.execPath === undefined && mac.workerPath === worker],
       ["sharp runtime node version gate", JSON.stringify(gate) === JSON.stringify([false, true, false, false, true, true, true])],
     ];
