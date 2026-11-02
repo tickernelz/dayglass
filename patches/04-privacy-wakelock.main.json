@@ -120,6 +120,24 @@
     "new": "                    run: () => takeScreenshotWithDesktopCapturer({\n                        onlyPrimaryScreen,\n                        displayIds,\n                        // X11 display_id never matches; keep the frame vs. flashy gnome-screenshot\n                        onPrimaryUnmatched: \"use-first\",\n                    }),"
   },
   {
+    "id": "display-scope-module",
+    "file": "dist-main/main/utils/platform/displayScope.js",
+    "mode": "write",
+    "from": "files/displayScope.js.txt"
+  },
+  {
+    "id": "linux-scope-import",
+    "file": "dist-main/main/utils/platform/LinuxStrategy.js",
+    "old": "import { takeWithPortalScreencast, isPortalScreencastAvailable, } from \"./portalScreencast.js\";\n",
+    "new": "import { takeWithPortalScreencast, isPortalScreencastAvailable, } from \"./portalScreencast.js\";\nimport { scopeToDisplays } from \"./displayScope.js\";\n"
+  },
+  {
+    "id": "linux-scope-frames",
+    "file": "dist-main/main/utils/platform/LinuxStrategy.js",
+    "old": "                    const res = await backend.run();\n                    if (res && res.length > 0) {\n                        log.info(`Backend ${backend.name} returned buffers`, {\n                            stats: getBufferStats(res),\n                        });\n                        log.info(`Screenshot taken with ${backend.name}`);\n                        this.preferredBackend = backend.name;\n                        return res;\n                    }\n",
+    "new": "                    const raw = await backend.run();\n                    const res = raw && raw.length > 0 && backend.name !== \"desktopCapturer\"\n                        ? scopeToDisplays(raw, { onlyPrimaryScreen, displayIds })\n                        : raw;\n                    if (raw && raw.length > 0 && !res) {\n                        log.warn(`Backend ${backend.name} frame cannot be cut to the selected displays, trying next option`);\n                        continue;\n                    }\n                    if (res && res.length > 0) {\n                        log.info(`Backend ${backend.name} returned buffers`, {\n                            stats: getBufferStats(res),\n                        });\n                        log.info(`Screenshot taken with ${backend.name}`);\n                        this.preferredBackend = backend.name;\n                        return res;\n                    }\n"
+  },
+  {
     "id": "dc-options",
     "file": "dist-main/main/utils/platform/desktopCapturerScreenshot.js",
     "old": "const { onlyPrimaryScreen, onPrimaryUnmatched = \"use-first\" } = options;",

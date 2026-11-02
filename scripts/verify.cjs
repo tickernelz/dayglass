@@ -39,6 +39,7 @@ const bundleFiles = [
   path.join(dir, "dist-main/main/utils/platform/MacStrategy.js"),
   path.join(dir, "dist-main/main/utils/platform/LinuxStrategy.js"),
   path.join(dir, "dist-main/main/utils/platform/desktopCapturerScreenshot.js"),
+  path.join(dir, "dist-main/main/utils/platform/displayScope.js"),
 ];
 
 const syntaxChecks = bundleFiles.map((file) => {
@@ -72,6 +73,7 @@ const staticChecks = [
   ["privacy modes in worker", mainFile("dist-main/main/utils/screenshot/sharpWorker.js").includes("case PrivacyMode.MOSAIC")],
   ["privacy native fallback wired", mainFile("dist-main/main/utils/screenshot/takeScreenshot.js").includes("applyNativePrivacy(buffer, privacy)")],
   ["privacy native fallback used by every path", mainFile("dist-main/main/utils/screenshot/takeScreenshot.js").split("nativeImageJpegFallback(nonEmptyBuffers[0], privacy)").length - 1 === 4],
+  ["linux whole-desktop frames cut to the selected displays", mainFile("dist-main/main/utils/platform/LinuxStrategy.js").includes("scopeToDisplays(raw, { onlyPrimaryScreen, displayIds })")],
   ["display ids reach desktopCapturer", mainFile("dist-main/main/utils/platform/desktopCapturerScreenshot.js").includes("wanted.includes(String(s.displayId))")],
   ["privacy setting default", jsSrc.includes("SCREENSHOT_PRIVACY_MODE]:`off`")],
   ["privacy ui control", jsSrc.includes("Screenshot privacy mode")],
@@ -385,6 +387,89 @@ const wakeLockChecks = () => {
   }
 };
 
+const displayScopeChecks = () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "display-scope-verify-"));
+  try {
+    const write = (rel, body) => {
+      fs.mkdirSync(path.dirname(path.join(tmp, rel)), { recursive: true });
+      fs.writeFileSync(path.join(tmp, rel), body);
+    };
+    write("node_modules/electron/package.json", JSON.stringify({ name: "electron", version: "0.0.0", main: "index.js" }));
+    write(
+      "node_modules/electron/index.js",
+      [
+        "const state = { displays: [], primaryId: 0 };",
+        "exports.state = state;",
+        "exports.screen = {",
+        "  getAllDisplays() { return state.displays; },",
+        "  getPrimaryDisplay() { return state.displays.find((d) => d.id === state.primaryId); },",
+        "};",
+        "exports.nativeImage = {",
+        "  createFromBuffer(buf) {",
+        "    const size = JSON.parse(buf.toString());",
+        "    return { getSize: () => size, crop: (rect) => ({ toPNG: () => Buffer.from(JSON.stringify(rect)) }) };",
+        "  },",
+        "};",
+      ].join("\n")
+    );
+    write("node_modules/electron-log/package.json", JSON.stringify({ name: "electron-log", version: "0.0.0", main: "index.js" }));
+    write("node_modules/electron-log/index.js", "const noop = () => {};\nmodule.exports = { info: noop, warn: noop, error: noop, debug: noop };");
+    fs.copyFileSync(path.join(dir, "dist-main/main/utils/platform/displayScope.js"), path.join(tmp, "displayScope.mjs"));
+    write(
+      "run.mjs",
+      [
+        'import { scopeToDisplays } from "./displayScope.mjs";',
+        'const { state } = await import("electron");',
+        "const frame = (width, height) => Buffer.from(JSON.stringify({ width, height }));",
+        "const cut = (buffers, options) => {",
+        "  const res = scopeToDisplays(buffers, options);",
+        "  if (!res) return null;",
+        "  return res === buffers ? 'unchanged' : res.map((b) => JSON.parse(b.toString()));",
+        "};",
+        "const out = {};",
+        "state.displays = [",
+        "  { id: 11, bounds: { x: 0, y: 0, width: 1920, height: 1080 } },",
+        "  { id: 22, bounds: { x: 1920, y: 0, width: 1920, height: 1080 } },",
+        "];",
+        "state.primaryId = 11;",
+        "const wide = [frame(3840, 1080)];",
+        "out.pickPrimary = cut(wide, { displayIds: ['11'] });",
+        "out.pickSecond = cut(wide, { displayIds: ['22'] });",
+        "out.all = cut(wide, { displayIds: [] });",
+        "out.bothPicked = cut(wide, { displayIds: ['11', '22'] });",
+        "out.onlyPrimary = cut(wide, { onlyPrimaryScreen: true });",
+        "out.onlyPrimaryOutsidePick = cut(wide, { displayIds: ['22'], onlyPrimaryScreen: true });",
+        "out.sizeMismatch = cut([frame(1920, 1080)], { displayIds: ['22'] });",
+        "out.multiFrame = cut([frame(1920, 1080), frame(1920, 1080)], { displayIds: ['22'] });",
+        "out.unknownDisplay = cut(wide, { displayIds: ['99'] });",
+        "state.displays = [",
+        "  { id: 22, bounds: { x: 0, y: 0, width: 1920, height: 1080 } },",
+        "  { id: 11, bounds: { x: -1280, y: -200, width: 1280, height: 1024 } },",
+        "];",
+        "state.primaryId = 22;",
+        "out.hidpiOffset = cut([frame(6400, 2560)], { displayIds: ['22'] });",
+        "console.log(JSON.stringify(out));",
+      ].join("\n")
+    );
+    const stdout = execFileSync(process.execPath, ["run.mjs"], { cwd: tmp, encoding: "utf8" });
+    const out = JSON.parse(stdout.trim().split("\n").pop());
+    console.log("  display scope: " + JSON.stringify(out));
+    const rect = (x, y, width, height) => JSON.stringify([{ x, y, width, height }]);
+    return [
+      ["display scope keeps only the picked primary", JSON.stringify(out.pickPrimary) === rect(0, 0, 1920, 1080)],
+      ["display scope keeps only the picked second display", JSON.stringify(out.pickSecond) === rect(1920, 0, 1920, 1080)],
+      ["display scope leaves all monitors untouched", out.all === "unchanged" && out.bothPicked === "unchanged"],
+      ["display scope applies primary only", JSON.stringify(out.onlyPrimary) === rect(0, 0, 1920, 1080)],
+      ["display scope primary only inside the pick", JSON.stringify(out.onlyPrimaryOutsidePick) === rect(1920, 0, 1920, 1080)],
+      ["display scope refuses a frame that does not match the layout", out.sizeMismatch === null && out.multiFrame === null],
+      ["display scope refuses a disconnected display", out.unknownDisplay === null],
+      ["display scope handles offsets and scale", JSON.stringify(out.hidpiOffset) === rect(2560, 400, 3840, 2160)],
+    ];
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+};
+
 const run = async () => {
   const checks = [...syntaxChecks, ...staticChecks];
   try {
@@ -410,6 +495,12 @@ const run = async () => {
   } catch (error) {
     console.log("FAIL wake lock state machine: " + error.message);
     checks.push(["wake lock state machine executed", false]);
+  }
+  try {
+    checks.push(...displayScopeChecks());
+  } catch (error) {
+    console.log("FAIL display scope harness: " + error.message);
+    checks.push(["display scope harness executed", false]);
   }
 
   let bad = 0;
