@@ -64,7 +64,9 @@ Artifacts land in `dist/`:
 
 ```
 dayglass_<version>_amd64.deb
+dayglass-<version>.x86_64.rpm
 dayglass_<version>_arm64.deb
+dayglass-<version>.aarch64.rpm
 dayglass-<version>-mac-x64.zip
 dayglass-<version>-mac-arm64.zip
 dayglass-<version>-win-x64.exe
@@ -79,14 +81,14 @@ dayglass-<version>-win-x64.exe
 | Key | Used for | Example |
 | --- | --- | --- |
 | `publicName` | artifact file names and release titles only | `dayglass` |
-| `identity.linux` | deb package name, install directory, binary, desktop entry, icon, startup class | `scrinio` |
+| `identity.linux` | deb/rpm package name, install directory, binary, desktop entry, icon, startup class | `scrinio` |
 | `identity.mac` | macOS bundle directory name inside the zip | `scrin.io.app` |
 | `identity.win` | Windows executable, product name, and shortcut name | `scrin.io` |
 | `identity.appId` | NSIS app id and deb vendor | `scrin.io` |
 
-Every artifact is checked against its identity after repacking: a deb whose `Package:` or `Version:` disagrees, a zip without `scrin.io.app/Contents/MacOS`, or a Windows payload without `scrin.io.exe` fails the build instead of shipping. That check exists because a renamed payload installs fine and then leaves a dead shortcut behind.
+Every artifact is checked against its identity after repacking: a deb whose `Package:` or `Version:` disagrees, an rpm whose package name disagrees, a zip without `scrin.io.app/Contents/MacOS`, or a Windows payload without `scrin.io.exe` fails the build instead of shipping. That check exists because a renamed payload installs fine and then leaves a dead shortcut behind.
 
-An earlier build renamed the installed identity to match the public name, so a machine carrying that build has a package called `dayglass` and a desktop entry pointing at a directory that no longer exists. Installing this build is a separate package, not an upgrade: remove the old one first (`sudo apt remove dayglass` on Linux, uninstall from Apps on Windows) before installing `scrinio`.
+An earlier build renamed the installed identity to match the public name, so a machine carrying that build has a package called `dayglass` and a desktop entry pointing at a directory that no longer exists. Installing this build is a separate package, not an upgrade: remove the old one first (`sudo apt remove dayglass` or `sudo dnf remove dayglass` on Linux, uninstall from Apps on Windows) before installing `scrinio`.
 
 Restored archives are cached in `cache/` and reused on the next run. `scripts/verify.cjs` exits non-zero if any patch is missing, so a silent bundle change fails the build instead of shipping an unpatched artifact.
 
@@ -128,7 +130,7 @@ Drop the new archive into `cache/` under the name the manifest expects, run `nod
 
 | Target | Host needs |
 | --- | --- |
-| Linux deb | `ar`, `tar`, `xz` |
+| Linux deb & rpm | `ar`, `tar`, `xz`, `rpmbuild` |
 | macOS zip | 7-Zip |
 | Windows installer | `electron-builder` plus NSIS; Wine on Linux, native toolchain on Windows |
 
