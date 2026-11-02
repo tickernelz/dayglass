@@ -1,0 +1,116 @@
+[
+  {
+    "id": "tray-preferences-module",
+    "file": "dist-main/main/trayPreferences.js",
+    "mode": "write",
+    "from": "files/trayPreferences.js.txt"
+  },
+  {
+    "id": "sharp-runtime-module",
+    "file": "dist-main/main/utils/screenshot/sharpRuntime.js",
+    "mode": "write",
+    "from": "files/sharpRuntime.js.txt"
+  },
+  {
+    "id": "minimize-linux-import",
+    "file": "dist-main/main/minimizeHandler.js",
+    "old": "import { isWindows } from \"./utils/platform.js\";",
+    "new": "import { isLinux, isWindows } from \"./utils/platform.js\";"
+  },
+  {
+    "id": "minimize-linux-events",
+    "file": "dist-main/main/minimizeHandler.js",
+    "old": "    if (!isWindows)\n        return;",
+    "new": "    if (!isWindows && !isLinux)\n        return;"
+  },
+  {
+    "id": "close-to-tray-import",
+    "file": "dist-main/main/quitHandler.js",
+    "old": "import { destroyTray } from \"./tray.js\";\n",
+    "new": "import { destroyTray } from \"./tray.js\";\nimport { getTrayPreferences } from \"./trayPreferences.js\";\n"
+  },
+  {
+    "id": "close-to-tray-handler",
+    "file": "dist-main/main/quitHandler.js",
+    "old": "    mainWindow.on(\"close\", (e) => {\n        if (!isQuitAllowed) {\n            e.preventDefault();\n            ipcWebContentsSend(\"quitApp\", mainWindow.webContents, undefined);\n        }\n    });",
+    "new": "    let isQuitRequested = false;\n    app.on(\"before-quit\", () => {\n        isQuitRequested = true;\n    });\n    mainWindow.on(\"close\", (e) => {\n        if (!isQuitAllowed) {\n            e.preventDefault();\n            if (!isQuitRequested && getTrayPreferences().closeToTray) {\n                mainWindow.hide();\n                return;\n            }\n            isQuitRequested = false;\n            ipcWebContentsSend(\"quitApp\", mainWindow.webContents, undefined);\n        }\n    });"
+  },
+  {
+    "id": "tray-open-restores",
+    "file": "dist-main/main/tray.js",
+    "old": "            if (mainWindow) {\n                mainWindow.show();\n                mainWindow.focus();\n            }",
+    "new": "            if (mainWindow) {\n                if (mainWindow.isMinimized())\n                    mainWindow.restore();\n                mainWindow.show();\n                mainWindow.focus();\n            }"
+  },
+  {
+    "id": "tray-quit-shows-confirmation",
+    "file": "dist-main/main/tray.js",
+    "old": "        label: \"Quit\",\n        click: () => {\n            app.quit();\n        },",
+    "new": "        label: \"Quit\",\n        click: () => {\n            const mainWindow = getMainWindow();\n            if (mainWindow && !mainWindow.isVisible()) {\n                mainWindow.show();\n                mainWindow.focus();\n            }\n            app.quit();\n        },"
+  },
+  {
+    "id": "tray-ipc-imports",
+    "file": "dist-main/main/registerIPCHandlers.js",
+    "old": "import { isMac } from \"./utils/platform.js\";\n",
+    "new": "import { isLinux, isMac } from \"./utils/platform.js\";\n"
+  },
+  {
+    "id": "tray-ipc-preferences-import",
+    "file": "dist-main/main/registerIPCHandlers.js",
+    "old": "import { setTrayTrackingState } from \"./tray.js\";\n",
+    "new": "import { setTrayTrackingState } from \"./tray.js\";\nimport { setTrayPreferences } from \"./trayPreferences.js\";\n"
+  },
+  {
+    "id": "linux-minimize-hides-window",
+    "file": "dist-main/main/registerIPCHandlers.js",
+    "old": "        else {\n            window.setSkipTaskbar(!isEnabled);\n        }\n    });\n",
+    "new": "        else {\n            window.setSkipTaskbar(!isEnabled);\n            if (isLinux && !isEnabled)\n                window.hide();\n        }\n    });\n    ipcMainHandle(\"setTrayPreferences\", (preferences) => {\n        setTrayPreferences(preferences);\n    });\n"
+  },
+  {
+    "id": "xwayland-relaunch-import",
+    "file": "dist-main/main/main.js",
+    "old": "import { setupTray, destroyTray } from \"./tray.js\";\n",
+    "new": "import { setupTray, destroyTray } from \"./tray.js\";\nimport { relaunchUnderXWaylandForTray } from \"./trayPreferences.js\";\n"
+  },
+  {
+    "id": "xwayland-relaunch-before-lock",
+    "file": "dist-main/main/main.js",
+    "old": "const gotLock = app.requestSingleInstanceLock();",
+    "new": "const gotLock = !relaunchUnderXWaylandForTray() && app.requestSingleInstanceLock();"
+  },
+  {
+    "id": "tray-preferences-bridge",
+    "file": "dist-main/main/preload.cjs",
+    "old": "    showAppInDock: (isEnabled) => ipcInvoke(\"showAppInDock\", isEnabled),\n",
+    "new": "    showAppInDock: (isEnabled) => ipcInvoke(\"showAppInDock\", isEnabled),\n    setTrayPreferences: (preferences) => ipcInvoke(\"setTrayPreferences\", preferences),\n"
+  },
+  {
+    "id": "sharp-runtime-import",
+    "file": "dist-main/main/utils/screenshot/runSharpWorker.js",
+    "old": "import { fileURLToPath } from \"node:url\";\n",
+    "new": "import { resolveSharpWorkerRuntime } from \"./sharpRuntime.js\";\n"
+  },
+  {
+    "id": "sharp-runtime-worker-path",
+    "file": "dist-main/main/utils/screenshot/runSharpWorker.js",
+    "old": "    const workerPath = fileURLToPath(new URL(\"./sharpWorker.js\", import.meta.url));\n",
+    "new": "    const runtime = await resolveSharpWorkerRuntime();\n    if (!runtime)\n        throw new Error(\"no sharp worker runtime on this system\");\n    const workerPath = runtime.workerPath;\n"
+  },
+  {
+    "id": "sharp-runtime-exec-path",
+    "file": "dist-main/main/utils/screenshot/runSharpWorker.js",
+    "old": "        const child = fork(workerPath, {\n",
+    "new": "        const child = fork(workerPath, {\n            execPath: runtime.execPath,\n"
+  },
+  {
+    "id": "sharp-runtime-screenshot-import",
+    "file": "dist-main/main/utils/screenshot/takeScreenshot.js",
+    "old": "import { runSharpWorker } from \"./runSharpWorker.js\";\n",
+    "new": "import { runSharpWorker } from \"./runSharpWorker.js\";\nimport { resolveSharpWorkerRuntime } from \"./sharpRuntime.js\";\n"
+  },
+  {
+    "id": "sharp-runtime-gate",
+    "file": "dist-main/main/utils/screenshot/takeScreenshot.js",
+    "old": "        if (sharpHealthy === false) {\n            log.warn(\"⚠️ sharp unavailable, skipping worker\");",
+    "new": "        if (sharpHealthy !== true && !(await resolveSharpWorkerRuntime())) {\n            sharpHealthy = false;\n        }\n        if (sharpHealthy === false) {\n            log.warn(\"⚠️ sharp unavailable, skipping worker\");"
+  }
+]

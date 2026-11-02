@@ -107,9 +107,37 @@ const extract = (target, archive, outDir) => {
   throw new Error("unsupported kind: " + target.kind);
 };
 
-const packAsar = (appDir, asarPath) => {
+const LINUX_UNPACKED_DIRS = [
+  "node_modules/@img",
+  "node_modules/sharp",
+  "node_modules/detect-libc",
+  "node_modules/semver",
+  "dist-main/main/utils/screenshot",
+];
+
+const linuxUnpackedFiles = (target) => [
+  "dist-main/main/utils/screenshot/sharpWorker.js",
+  "dist-main/main/utils/screenshot/privacy.js",
+  "dist-main/main/utils/screenshot/imageFormat.js",
+  "dist-main/main/utils/screenshot/sharpWorkerConstants.js",
+  "node_modules/sharp/lib/index.js",
+  "node_modules/detect-libc/package.json",
+  "node_modules/semver/functions/satisfies.js",
+  "node_modules/@img/colour/package.json",
+  "node_modules/@img/sharp-linux-" + (target.arch === "amd64" ? "x64" : "arm64") + "/package.json",
+];
+
+const packAsar = (appDir, asarPath, target) => {
   rm(asarPath);
-  runAsar(["pack", appDir, asarPath, "--unpack-dir", "node_modules/@img"]);
+  if (target.kind !== "deb") {
+    runAsar(["pack", appDir, asarPath, "--unpack-dir", "node_modules/@img"]);
+    return;
+  }
+  const pattern = "{" + LINUX_UNPACKED_DIRS.flatMap((dir) => [dir, dir + "/**"]).join(",") + "}";
+  runAsar(["pack", appDir, asarPath, "--unpack-dir", pattern]);
+  const missing = linuxUnpackedFiles(target).filter((rel) => !fs.existsSync(path.join(asarPath + ".unpacked", rel)));
+  if (missing.length) throw new Error("sharp worker files missing from app.asar.unpacked: " + missing.join(", "));
+  console.log("  sharp worker unpacked for the system node runtime");
 };
 
 const readDeb = (debPath) => {
@@ -435,7 +463,7 @@ const main = async () => {
   run(process.execPath, [path.join(__dirname, "patch.cjs"), appDir]);
   run(process.execPath, [path.join(__dirname, "verify.cjs"), appDir]);
 
-  packAsar(appDir, asarPath);
+  packAsar(appDir, asarPath, target);
   console.log("packed asar");
 
   let artifacts = [];

@@ -1,0 +1,57 @@
+import { execFile } from "node:child_process";
+import fs from "node:fs";
+import { posix as path } from "node:path";
+import { fileURLToPath } from "node:url";
+import log from "electron-log";
+const WELL_KNOWN_NODES = ["/usr/bin/node", "/usr/local/bin/node", "/home/linuxbrew/.linuxbrew/bin/node"];
+export const supportsTypelessEsm = (version) => {
+    const [major, minor] = String(version).trim().replace(/^v/, "").split(".").map(Number);
+    return major > 22 || (major === 22 && minor >= 7) || (major === 20 && minor >= 19);
+};
+export const unpackedPath = (file) => file.replace(/([\\/])app\.asar([\\/])/, "$1app.asar.unpacked$2");
+export const nodeCandidates = (env) => [
+    ...new Set([
+        ...(env.PATH || "").split(":").filter((dir) => path.isAbsolute(dir)).map((dir) => path.join(dir, "node")),
+        ...WELL_KNOWN_NODES,
+    ]),
+];
+const probeNodeVersion = (candidate) => new Promise((resolve) => {
+    const env = { ...process.env };
+    delete env.ELECTRON_RUN_AS_NODE;
+    delete env.NODE_OPTIONS;
+    execFile(candidate, ["-p", "process.versions.node"], { encoding: "utf8", timeout: 5000, env }, (error, stdout) => {
+        resolve(error ? null : stdout.trim());
+    });
+});
+export const findSharpWorkerRuntime = async ({ platform = process.platform, env = process.env, workerPath = fileURLToPath(new URL("./sharpWorker.js", import.meta.url)), exists = fs.existsSync, probe = probeNodeVersion, } = {}) => {
+    if (platform !== "linux")
+        return { execPath: undefined, workerPath };
+    const linuxWorker = unpackedPath(workerPath);
+    const sharpPackage = path.join(path.dirname(linuxWorker), "..", "..", "..", "..", "node_modules", "sharp", "package.json");
+    if (!exists(linuxWorker) || !exists(sharpPackage))
+        return null;
+    for (const candidate of nodeCandidates(env)) {
+        if (!exists(candidate))
+            continue;
+        const version = await probe(candidate);
+        if (version && supportsTypelessEsm(version))
+            return { execPath: candidate, workerPath: linuxWorker, version };
+    }
+    return null;
+};
+let runtime;
+export const resolveSharpWorkerRuntime = () => {
+    runtime ??= findSharpWorkerRuntime().then((found) => {
+        if (process.platform === "linux") {
+            if (found)
+                log.info(`[Screenshot] sharp worker runs on system node ${found.version} (${found.execPath})`);
+            else
+                log.warn("[Screenshot] no system node >= 20.19 or 22.7 for the sharp worker; using the nativeImage fallback");
+        }
+        return found;
+    }, (error) => {
+        log.warn("[Screenshot] sharp worker runtime lookup failed", error);
+        return null;
+    });
+    return runtime;
+};
