@@ -1,0 +1,31 @@
+import log from "electron-log";
+import { nativeImage, screen } from "electron";
+import { pickDisplays, cropRects } from "./displayCrop.js";
+export const wantsDisplaySubset = ({ onlyPrimaryScreen = false, displayIds = [] } = {}) => onlyPrimaryScreen || (Array.isArray(displayIds) && displayIds.length > 0);
+export const cropToDisplays = (buffers, options) => {
+    const displays = screen.getAllDisplays();
+    const picked = pickDisplays(displays, screen.getPrimaryDisplay().id, options);
+    if (picked.length === 0) {
+        log.warn("cropToDisplays: none of the selected displays is connected");
+        return null;
+    }
+    if (picked.length === displays.length)
+        return buffers;
+    if (buffers.length !== 1) {
+        log.warn(`cropToDisplays: expected one full-desktop frame, got ${buffers.length}`);
+        return null;
+    }
+    const image = nativeImage.createFromBuffer(buffers[0]);
+    if (image.isEmpty()) {
+        log.warn("cropToDisplays: the full-desktop frame could not be decoded");
+        return null;
+    }
+    const { width, height } = image.getSize();
+    const rects = cropRects(displays, picked, width, height);
+    if (!rects) {
+        log.warn(`cropToDisplays: frame ${width}x${height} does not match the display layout`);
+        return null;
+    }
+    log.info(`cropToDisplays: cropped ${width}x${height} to ${rects.map((r) => `${r.width}x${r.height}+${r.x}+${r.y}`).join(", ")}`);
+    return rects.map((rect) => image.crop(rect).toPNG());
+};

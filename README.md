@@ -13,7 +13,7 @@ The source archives live in this repository under `sources/`, stored as masked c
 | Process scanning | Local background-process inspection returns an empty result and never runs |
 | Telemetry upload | The periodic reporting of detected processes is removed |
 | Auto-update | Update checks and installer handoff are disabled; a build stays on the version you installed |
-| Monitor selection | Settings gains a screenshot scope control: all monitors, primary only, or a picked subset |
+| Monitor selection | Settings gains a screenshot scope control: all monitors, primary only, or a picked subset. On Linux, a frame from a whole-desktop tool (spectacle, grim, gnome-screenshot, flameshot, scrot) is cropped to the chosen monitors; a frame that does not match the monitor layout is dropped and the next tool is tried |
 | Idle detection | Settings gains an idle-detection switch; when off, idle time is neither tracked nor reported |
 | Display sleep | While idle detection is off, the display is held awake through a `prevent-display-sleep` blocker so the machine never sleeps the screen out from under a tracked session |
 | Screenshot privacy | Settings gains a privacy control that masks every captured frame before it leaves the main process: `off`, `blur`, `mosaic`, or `text` (crisp edges, unreadable glyphs) |
@@ -35,6 +35,7 @@ patches/                  declarative patch definitions
   03-monitor-idle.css.txt appended stylesheet block
   04-privacy-wakelock.main.json    wake-lock module, privacy transforms, capture options, IPC
   05-privacy-wakelock.renderer.json privacy setting, privacy control, wake-lock wiring
+  07-monitor-crop.main.json       Linux crop of whole-desktop frames to the chosen monitors
   files/                  whole-file sources copied into the application tree
   10-liberal.main.json    main-process patches
   11-liberal.renderer.json renderer patches
