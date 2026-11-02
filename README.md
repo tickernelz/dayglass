@@ -74,7 +74,7 @@ dayglass-<version>-win-x64.exe
 
 `<version>` is the upstream version plus this build's own suffix, so a patched artifact never claims to be the upstream release it was cut from. With `"version": "6.23.0"` and `"releaseSuffix": "liberal.3"` in `config/release.json`, the artifact is `dayglass_6.23.0-liberal.3_amd64.deb`. The suffix is what changes when this repository ships a new patch set against the same upstream version; the leading version tracks the application source and only moves when `sources/` moves.
 
-RPM cannot carry a hyphen inside `Version`, so the rpm is `scrinio-6.23.0-1.liberal.3`: `Version` is the upstream version and `Release` is `1.` plus the suffix. The leading `1` keeps it newer than a plain `6.23.0-1` package, such as one converted from the deb with `alien`, so `sudo dnf install ./dayglass-<version>.x86_64.rpm` upgrades it in place.
+RPM cannot carry a hyphen inside `Version`, so the rpm is `scrinio-6.23.0-1.liberal.3`: `Version` is the upstream version and `Release` is `1.` plus the suffix. The leading `1` makes rpm sort it above a plain `6.23.0-1` package of the same name; a bare `liberal.3` would sort below it.
 
 ## Public name and installed identity
 
