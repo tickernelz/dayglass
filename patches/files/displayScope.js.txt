@@ -28,13 +28,17 @@ export const displayRects = (displays, selected, width, height) => {
         };
     });
 };
-export const scopeToDisplays = (buffers, { onlyPrimaryScreen = false, displayIds = [] } = {}) => {
+export const scopeToDisplays = (buffers, { onlyPrimaryScreen = false, displayIds = [], wholeDesktop = true } = {}) => {
     const displays = screen.getAllDisplays();
     const selected = selectDisplays(displays, screen.getPrimaryDisplay().id, displayIds, onlyPrimaryScreen);
     if (selected.length === displays.length)
         return buffers;
     if (selected.length === 0) {
         log.warn(`display scope: none of the selected displays (${displayIds.join(",")}) is connected`);
+        return null;
+    }
+    if (!wholeDesktop) {
+        log.warn("display scope: per-monitor streams cannot be mapped to the selected displays");
         return null;
     }
     if (buffers.length !== 1) {
