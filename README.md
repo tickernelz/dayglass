@@ -88,7 +88,9 @@ RPM cannot carry a hyphen inside `Version`, so the rpm is `scrinio-6.23.0-1.libe
 | `identity.win` | Windows executable, product name, and shortcut name | `scrin.io` |
 | `identity.appId` | NSIS app id and deb vendor | `scrin.io` |
 
-Every artifact is checked against its identity after repacking: a deb whose `Package:` or `Version:` disagrees, an rpm whose package name or version disagrees, a zip without `scrin.io.app/Contents/MacOS`, or a Windows payload without `scrin.io.exe` fails the build instead of shipping. That check exists because a renamed payload installs fine and then leaves a dead shortcut behind.
+Every artifact is checked against its identity after repacking: a deb whose `Package:` or `Version:` disagrees, whose payload is not rooted at `./opt/scrinio` and `./usr` with root ownership, whose `chrome-sandbox` is not setuid, whose `/usr/bin/scrinio` link is missing, or whose `md5sums` does not cover the payload, an rpm whose package name or version disagrees, a zip without `scrin.io.app/Contents/MacOS`, or a Windows payload without `scrin.io.exe` fails the build instead of shipping. That check exists because a renamed payload installs fine and then leaves a dead shortcut behind.
+
+Both Linux packages carry the setuid `chrome-sandbox` and the `/usr/bin/scrinio` link as packaged files, with no install scripts. Debs up to `liberal.5` were rooted at `data/`, so they installed to `/data/opt/scrinio` and the desktop entry pointed at nothing; installing this deb over one of them upgrades it in place and removes `/data/opt/scrinio`.
 
 An earlier build renamed the installed identity to match the public name, so a machine carrying that build has a package called `dayglass` and a desktop entry pointing at a directory that no longer exists. Installing this build is a separate package, not an upgrade: remove the old one first (`sudo apt remove dayglass` or `sudo dnf remove dayglass` on Linux, uninstall from Apps on Windows) before installing `scrinio`.
 
