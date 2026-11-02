@@ -235,7 +235,7 @@ const repackRpm = (target, out, meta) => {
     "License: " + (meta.license || "Proprietary"),
     "URL: " + (meta.homepage || "https://" + CFG.identity.appId + "/"),
     "Requires: gtk3, nss, alsa-lib, libnotify, libsecret, libXScrnSaver, libXtst, libuuid, at-spi2-core, xdg-utils",
-    "Recommends: flameshot, grim, gnome-screenshot, scrot, xdg-desktop-portal, xdg-desktop-portal-wlr, xdg-desktop-portal-gnome",
+    "Recommends: flameshot, grim, gnome-screenshot, scrot, xdg-desktop-portal, xdg-desktop-portal-wlr, xdg-desktop-portal-gnome, xrandr",
     "",
     "%description",
     identity + " time tracking client (patched build)",

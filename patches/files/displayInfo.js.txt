@@ -1,0 +1,63 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { screen } from "electron";
+import log from "electron-log";
+import { parseXrandr, parseKscreen, edidName, labelDisplays } from "./displayLayout.js";
+const execFileAsync = promisify(execFile);
+const DRM = "/sys/class/drm";
+const readEdidNames = async () => {
+    const names = new Map();
+    let entries = [];
+    try {
+        entries = await fs.readdir(DRM);
+    }
+    catch {
+        return names;
+    }
+    for (const entry of entries) {
+        const m = /^card\d+-(.+)$/.exec(entry);
+        if (!m)
+            continue;
+        try {
+            if ((await fs.readFile(path.join(DRM, entry, "status"), "utf8")).trim() !== "connected")
+                continue;
+            const name = edidName(await fs.readFile(path.join(DRM, entry, "edid")));
+            if (name)
+                names.set(m[1], name);
+        }
+        catch {
+            continue;
+        }
+    }
+    return names;
+};
+const linuxOutputs = async () => {
+    if (process.env.DISPLAY) {
+        try {
+            const { stdout } = await execFileAsync("xrandr", ["--query"], { timeout: 2000 });
+            const outputs = parseXrandr(stdout);
+            if (outputs.length > 0)
+                return outputs;
+        }
+        catch (err) {
+            log.warn("display info: xrandr unavailable", err?.message);
+        }
+    }
+    try {
+        const { stdout } = await execFileAsync("kscreen-doctor", ["-j"], { timeout: 2000 });
+        return parseKscreen(stdout);
+    }
+    catch {
+        return [];
+    }
+};
+export const describeDisplays = async () => {
+    const displays = screen.getAllDisplays();
+    const primaryId = screen.getPrimaryDisplay().id;
+    if (process.platform !== "linux")
+        return labelDisplays(displays, primaryId);
+    const [outputs, names] = await Promise.all([linuxOutputs(), readEdidNames()]);
+    return labelDisplays(displays, primaryId, outputs, names);
+};

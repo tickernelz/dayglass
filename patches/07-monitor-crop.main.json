@@ -12,15 +12,33 @@
     "from": "files/cropToDisplays.js.txt"
   },
   {
+    "id": "display-layout-module",
+    "file": "dist-main/main/utils/screenshot/displayLayout.js",
+    "mode": "write",
+    "from": "files/displayLayout.js.txt"
+  },
+  {
+    "id": "display-info-module",
+    "file": "dist-main/main/utils/screenshot/displayInfo.js",
+    "mode": "write",
+    "from": "files/displayInfo.js.txt"
+  },
+  {
     "id": "linux-crop-import",
     "file": "dist-main/main/utils/platform/LinuxStrategy.js",
     "old": "import { takeScreenshotWithDesktopCapturer } from \"./desktopCapturerScreenshot.js\";\n",
-    "new": "import { takeScreenshotWithDesktopCapturer } from \"./desktopCapturerScreenshot.js\";\nimport { cropToDisplays, wantsDisplaySubset } from \"../screenshot/cropToDisplays.js\";\n"
+    "new": "import { takeScreenshotWithDesktopCapturer } from \"./desktopCapturerScreenshot.js\";\nimport { cropToDisplays, wantsDisplaySubset } from \"../screenshot/cropToDisplays.js\";\nimport { describeDisplays } from \"../screenshot/displayInfo.js\";\nimport { resolveScopeIds } from \"../screenshot/displayLayout.js\";\n"
   },
   {
     "id": "linux-crop-backends",
     "file": "dist-main/main/utils/platform/LinuxStrategy.js",
     "old": "                    const res = await backend.run();\n                    if (res && res.length > 0) {",
     "new": "                    const raw = await backend.run();\n                    const res = raw && raw.length > 0 && backend.name !== \"desktopCapturer\" && wantsDisplaySubset({ onlyPrimaryScreen, displayIds })\n                        ? cropToDisplays(raw, { onlyPrimaryScreen, displayIds })\n                        : raw;\n                    if (res && res.length > 0) {"
+  },
+  {
+    "id": "linux-resolve-scope",
+    "file": "dist-main/main/utils/platform/LinuxStrategy.js",
+    "old": "        const { onlyPrimaryScreen = false, displayIds = [] } = options;\n        const restoreScreenshotEffects = await disableScreenshotEffects();",
+    "new": "        const { onlyPrimaryScreen = false, displayIds = [] } = wantsDisplaySubset(options) ? resolveScopeIds(await describeDisplays(), options) : options;\n        const restoreScreenshotEffects = await disableScreenshotEffects();"
   }
 ]

@@ -1,0 +1,73 @@
+export const parseXrandr = (text) => String(text || "")
+    .split("\n")
+    .map((line) => /^(\S+) connected (primary )?(\d+)x(\d+)\+(-?\d+)\+(-?\d+)/.exec(line))
+    .filter(Boolean)
+    .map((m) => ({ connector: m[1], primary: Boolean(m[2]), x: Number(m[5]), y: Number(m[6]), width: Number(m[3]), height: Number(m[4]) }));
+export const parseKscreen = (json) => {
+    const outputs = (JSON.parse(json).outputs || []).filter((o) => o.enabled && o.connected && o.pos && o.size);
+    return outputs.map((o) => {
+        const scale = o.scale > 0 ? o.scale : 1;
+        const sideways = o.rotation === 2 || o.rotation === 8;
+        return {
+            connector: o.name,
+            primary: o.priority === 1,
+            x: o.pos.x,
+            y: o.pos.y,
+            width: Math.round((sideways ? o.size.height : o.size.width) / scale),
+            height: Math.round((sideways ? o.size.width : o.size.height) / scale),
+        };
+    });
+};
+export const edidName = (edid) => {
+    if (!edid || edid.length < 128)
+        return null;
+    for (const at of [54, 72, 90, 108]) {
+        if (edid[at] === 0 && edid[at + 1] === 0 && edid[at + 2] === 0 && edid[at + 3] === 0xfc) {
+            const name = Buffer.from(edid.subarray(at + 5, at + 18)).toString("latin1").split("\n")[0].trim();
+            if (name)
+                return name;
+        }
+    }
+    const code = (edid[8] << 8) | edid[9];
+    const vendor = [10, 5, 0].map((shift) => String.fromCharCode(((code >> shift) & 31) + 64)).join("");
+    return vendor + " " + (edid[10] | (edid[11] << 8)).toString(16).toUpperCase().padStart(4, "0");
+};
+const sameRect = (output, bounds) => output.x === bounds.x &&
+    output.y === bounds.y &&
+    Math.abs(output.width - bounds.width) <= 1 &&
+    Math.abs(output.height - bounds.height) <= 1;
+export const labelDisplays = (displays, electronPrimaryId, outputs = [], names = new Map()) => {
+    const rows = displays.map((display, index) => {
+        const output = outputs.find((o) => sameRect(o, display.bounds));
+        return {
+            id: output ? output.connector : String(display.id),
+            electronId: String(display.id),
+            connector: output ? output.connector : null,
+            label: output ? names.get(output.connector) || output.connector : display.label || `Display ${index + 1}`,
+            outputPrimary: output ? output.primary : false,
+            electronPrimary: String(display.id) === String(electronPrimaryId),
+            bounds: display.bounds,
+            pixelsWide: Math.round(display.size.width * display.scaleFactor),
+            pixelsHigh: Math.round(display.size.height * display.scaleFactor),
+        };
+    });
+    const fromOutputs = rows.some((row) => row.outputPrimary);
+    const seen = new Map();
+    for (const row of rows)
+        seen.set(row.label, (seen.get(row.label) || 0) + 1);
+    return rows.map(({ outputPrimary, electronPrimary, ...row }) => ({
+        ...row,
+        label: seen.get(row.label) > 1 && row.connector ? `${row.label} (${row.connector})` : row.label,
+        primary: fromOutputs ? outputPrimary : electronPrimary,
+    }));
+};
+export const resolveScopeIds = (rows, options = {}) => {
+    const { onlyPrimaryScreen = false, displayIds = [] } = options;
+    if (onlyPrimaryScreen) {
+        const primary = rows.find((row) => row.primary);
+        return primary ? { ...options, onlyPrimaryScreen: false, displayIds: [primary.electronId] } : options;
+    }
+    const wanted = (Array.isArray(displayIds) ? displayIds : []).map((id) => String(id));
+    const matched = rows.filter((row) => wanted.includes(row.id) || wanted.includes(row.electronId)).map((row) => row.electronId);
+    return matched.length > 0 ? { ...options, displayIds: [...new Set(matched)] } : options;
+};
