@@ -13,7 +13,7 @@ The source archives live in this repository under `sources/`, stored as masked c
 | Process scanning | Local background-process inspection returns an empty result and never runs |
 | Telemetry upload | The periodic reporting of detected processes is removed |
 | Auto-update | Update checks and installer handoff are disabled; a build stays on the version you installed |
-| Monitor selection | Settings gains a screenshot scope control: all monitors, primary only, or a picked subset. On Linux, a frame from a whole-desktop tool (spectacle, grim, gnome-screenshot, flameshot, scrot) is cropped to the chosen monitors; a frame that does not match the monitor layout is dropped and the next tool is tried |
+| Monitor selection | Settings gains a screenshot scope control: all monitors, primary only, or a picked subset. On Linux, a frame from a whole-desktop tool (spectacle, grim, gnome-screenshot, flameshot, scrot) is cropped to the chosen monitors; a frame that does not match the monitor layout is dropped and the next tool is tried. Linux monitors are listed by their EDID name, the primary comes from `xrandr` (or `kscreen-doctor`) rather than Electron, and the selection is stored by connector (`DP-1`) so it survives the switch between Wayland and XWayland |
 | Idle detection | Settings gains an idle-detection switch; when off, idle time is neither tracked nor reported |
 | Display sleep | While idle detection is off, the display is held awake through a `prevent-display-sleep` blocker so the machine never sleeps the screen out from under a tracked session |
 | Screenshot privacy | Settings gains a privacy control that masks every captured frame before it leaves the main process: `off`, `blur`, `mosaic`, or `text` (crisp edges, unreadable glyphs) |

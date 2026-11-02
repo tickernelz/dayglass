@@ -141,7 +141,7 @@
     "id": "ipc-wake-lock-import",
     "file": "dist-main/main/registerIPCHandlers.js",
     "old": "import { startAppNapPrevention, stopAppNapPrevention, } from \"./appNapPrevention.js\";",
-    "new": "import { startAppNapPrevention, stopAppNapPrevention, } from \"./appNapPrevention.js\";\nimport { setDisplayWakeLock } from \"./displayWakeLock.js\";"
+    "new": "import { startAppNapPrevention, stopAppNapPrevention, } from \"./appNapPrevention.js\";\nimport { setDisplayWakeLock } from \"./displayWakeLock.js\";\nimport { describeDisplays } from \"./utils/screenshot/displayInfo.js\";"
   },
   {
     "id": "ipc-screenshot-options",
@@ -153,7 +153,7 @@
     "id": "ipc-wake-lock-handlers",
     "file": "dist-main/main/registerIPCHandlers.js",
     "old": "    ipcMainHandle(\"stopAppNapPrevention\", () => {\n        stopAppNapPrevention();\n    });\n};",
-    "new": "    ipcMainHandle(\"stopAppNapPrevention\", () => {\n        stopAppNapPrevention();\n    });\n    ipcMainHandle(\"setDisplayWakeLock\", (enabled) => {\n        return setDisplayWakeLock(!!enabled);\n    });\n    ipcMainHandle(\"getDisplays\", () => {\n        const primary = screen.getPrimaryDisplay();\n        return screen.getAllDisplays().map((display, index) => ({\n            id: String(display.id),\n            label: display.label || `Display ${index + 1}`,\n            primary: display.id === primary.id,\n            pixelsWide: Math.round(display.size.width * display.scaleFactor),\n            pixelsHigh: Math.round(display.size.height * display.scaleFactor),\n        }));\n    });\n};"
+    "new": "    ipcMainHandle(\"stopAppNapPrevention\", () => {\n        stopAppNapPrevention();\n    });\n    ipcMainHandle(\"setDisplayWakeLock\", (enabled) => {\n        return setDisplayWakeLock(!!enabled);\n    });\n    ipcMainHandle(\"getDisplays\", async () => {\n        const rows = await describeDisplays();\n        return rows.map(({ id, electronId, label, primary, pixelsWide, pixelsHigh }) => ({ id, electronId, label, primary, pixelsWide, pixelsHigh }));\n    });\n};"
   },
   {
     "id": "preload-screenshot-options",

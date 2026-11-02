@@ -41,6 +41,8 @@ const bundleFiles = [
   path.join(dir, "dist-main/main/utils/platform/desktopCapturerScreenshot.js"),
   path.join(dir, "dist-main/main/utils/screenshot/displayCrop.js"),
   path.join(dir, "dist-main/main/utils/screenshot/cropToDisplays.js"),
+  path.join(dir, "dist-main/main/utils/screenshot/displayLayout.js"),
+  path.join(dir, "dist-main/main/utils/screenshot/displayInfo.js"),
   path.join(dir, "dist-main/main/utils/screenshot/sharpRuntime.js"),
   path.join(dir, "dist-main/main/trayPreferences.js"),
   path.join(dir, "dist-main/main/quitHandler.js"),
@@ -70,7 +72,7 @@ const staticChecks = [
 
   ["wake lock uses prevent-display-sleep", mainFile("dist-main/main/displayWakeLock.js").includes('powerSaveBlocker.start("prevent-display-sleep")')],
   ["wake lock ipc registered", /ipcMainHandle\("setDisplayWakeLock", \(enabled\) => \{/.test(mainFile("dist-main/main/registerIPCHandlers.js"))],
-  ["display list ipc registered", /ipcMainHandle\("getDisplays", \(\) => \{/.test(mainFile("dist-main/main/registerIPCHandlers.js"))],
+  ["display list ipc registered", /ipcMainHandle\("getDisplays", async \(\) => \{/.test(mainFile("dist-main/main/registerIPCHandlers.js"))],
   ["preload wake lock bridge", preload.includes('setDisplayWakeLock: (enabled) => ipcInvoke("setDisplayWakeLock", enabled)')],
   ["preload display list bridge", preload.includes('getDisplays: () => ipcInvoke("getDisplays")')],
   ["screenshot ipc takes options", /ipcMainHandle\("takeScreenshot", \(options\) =>/.test(mainFile("dist-main/main/registerIPCHandlers.js"))],
@@ -582,6 +584,50 @@ const sharpRuntimeChecks = async () => {
   }
 };
 
+const displayNameChecks = async () => {
+  const { pathToFileURL } = require("url");
+  const { parseXrandr, parseKscreen, edidName, labelDisplays, resolveScopeIds } = await import(pathToFileURL(path.join(dir, "dist-main/main/utils/screenshot/displayLayout.js")).href);
+  const xr = parseXrandr("Screen 0: minimum 16 x 16\nDP-1 connected 1920x1080+0+0 (normal left) 478mm x 260mm\n   1920x1080 60.00*+\nDP-2 connected primary 1920x1080+1920+0 (normal) 530mm x 300mm\nHDMI-1 disconnected (normal)\n");
+  const ks = parseKscreen(JSON.stringify({ outputs: [
+    { name: "eDP-1", enabled: true, connected: true, priority: 1, pos: { x: 0, y: 0 }, size: { width: 2880, height: 1800 }, scale: 1.5, rotation: 1 },
+    { name: "DP-3", enabled: true, connected: true, priority: 2, pos: { x: 1920, y: 0 }, size: { width: 2560, height: 1440 }, scale: 1, rotation: 2 },
+    { name: "DP-4", enabled: false, connected: true, priority: 3, pos: { x: 0, y: 0 }, size: { width: 1, height: 1 }, scale: 1 },
+  ] }));
+  const edid = Buffer.alloc(128);
+  edid[8] = 0x1e; edid[9] = 0x6d; edid[10] = 0x34; edid[11] = 0x12;
+  const bare = Buffer.from(edid);
+  edid.set([0, 0, 0, 0xfc, 0], 72);
+  edid.write("LG ULTRAGEAR\n ", 77, "latin1");
+  const electron = [
+    { id: 64, label: "", bounds: { x: 0, y: 0, width: 1920, height: 1080 }, size: { width: 1920, height: 1080 }, scaleFactor: 1 },
+    { id: 65, label: "", bounds: { x: 1920, y: 0, width: 1920, height: 1080 }, size: { width: 1920, height: 1080 }, scaleFactor: 1 },
+  ];
+  const names = new Map([["DP-1", "D22e-20"], ["DP-2", "LG ULTRAGEAR"]]);
+  const rows = labelDisplays(electron, 64, xr, names);
+  const plain = labelDisplays(electron, 64, [], new Map());
+  const twins = labelDisplays(electron, 64, xr, new Map([["DP-1", "Same"], ["DP-2", "Same"]]));
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const ipc = mainFile("dist-main/main/registerIPCHandlers.js");
+  const linux = mainFile("dist-main/main/utils/platform/LinuxStrategy.js");
+  return [
+    ["xrandr outputs parsed with primary", same(xr, [{ connector: "DP-1", primary: false, x: 0, y: 0, width: 1920, height: 1080 }, { connector: "DP-2", primary: true, x: 1920, y: 0, width: 1920, height: 1080 }])],
+    ["kscreen outputs parsed in logical pixels with priority as primary", same(ks.map((o) => [o.connector, o.primary, o.width, o.height]), [["eDP-1", true, 1920, 1200], ["DP-3", false, 1440, 2560]])],
+    ["edid monitor name read from the descriptor", edidName(edid) === "LG ULTRAGEAR"],
+    ["edid without a name falls back to vendor and product", edidName(bare) === "GSM 1234"],
+    ["displays are named after their monitors", same(rows.map((r) => [r.id, r.label]), [["DP-1", "D22e-20"], ["DP-2", "LG ULTRAGEAR"]])],
+    ["primary comes from the system, not the first display", rows[0].primary === false && rows[1].primary === true],
+    ["without system outputs the electron data is kept", same(plain.map((r) => [r.id, r.label, r.primary]), [["64", "Display 1", true], ["65", "Display 2", false]])],
+    ["identical monitor names are told apart by connector", same(twins.map((r) => r.label), ["Same (DP-1)", "Same (DP-2)"])],
+    ["primary only resolves to the system primary", same(resolveScopeIds(rows, { onlyPrimaryScreen: true }).displayIds, ["65"]) && resolveScopeIds(rows, { onlyPrimaryScreen: true }).onlyPrimaryScreen === false],
+    ["picked connectors resolve to capture ids", same(resolveScopeIds(rows, { displayIds: ["DP-1"] }).displayIds, ["64"])],
+    ["a selection saved with old capture ids still resolves", same(resolveScopeIds(rows, { displayIds: ["65"] }).displayIds, ["65"])],
+    ["an unknown selection is passed on and dropped downstream", same(resolveScopeIds(rows, { displayIds: ["gone"] }).displayIds, ["gone"])],
+    ["settings list uses the named displays", ipc.includes("await describeDisplays()") && !ipc.includes("`Display ${index + 1}`")],
+    ["linux capture resolves the scope before cropping", linux.includes("resolveScopeIds(await describeDisplays(), options)")],
+    ["selection count ignores monitors that are no longer connected", jsSrc.includes("${SL.length} of ${L.length} selected")],
+  ];
+};
+
 const run = async () => {
   const checks = [...syntaxChecks, ...staticChecks];
   try {
@@ -628,6 +674,13 @@ const run = async () => {
   } catch (error) {
     console.log("FAIL sharp runtime harness: " + error.message);
     checks.push(["sharp runtime harness executed", false]);
+  }
+
+  try {
+    checks.push(...(await displayNameChecks()));
+  } catch (error) {
+    console.log("FAIL display name harness: " + error.message);
+    checks.push(["display name harness executed", false]);
   }
 
   let bad = 0;
