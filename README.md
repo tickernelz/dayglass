@@ -74,6 +74,8 @@ dayglass-<version>-win-x64.exe
 
 `<version>` is the upstream version plus this build's own suffix, so a patched artifact never claims to be the upstream release it was cut from. With `"version": "6.23.0"` and `"releaseSuffix": "liberal.3"` in `config/release.json`, the artifact is `dayglass_6.23.0-liberal.3_amd64.deb`. The suffix is what changes when this repository ships a new patch set against the same upstream version; the leading version tracks the application source and only moves when `sources/` moves.
 
+RPM cannot carry a hyphen inside `Version`, so the rpm is `scrinio-6.23.0-1.liberal.3`: `Version` is the upstream version and `Release` is `1.` plus the suffix. The leading `1` keeps it newer than a plain `6.23.0-1` package, such as one converted from the deb with `alien`, so `sudo dnf install ./dayglass-<version>.x86_64.rpm` upgrades it in place.
+
 ## Public name and installed identity
 
 `config/release.json` separates the two, and nothing else is allowed to blur them:
@@ -86,7 +88,7 @@ dayglass-<version>-win-x64.exe
 | `identity.win` | Windows executable, product name, and shortcut name | `scrin.io` |
 | `identity.appId` | NSIS app id and deb vendor | `scrin.io` |
 
-Every artifact is checked against its identity after repacking: a deb whose `Package:` or `Version:` disagrees, an rpm whose package name disagrees, a zip without `scrin.io.app/Contents/MacOS`, or a Windows payload without `scrin.io.exe` fails the build instead of shipping. That check exists because a renamed payload installs fine and then leaves a dead shortcut behind.
+Every artifact is checked against its identity after repacking: a deb whose `Package:` or `Version:` disagrees, an rpm whose package name or version disagrees, a zip without `scrin.io.app/Contents/MacOS`, or a Windows payload without `scrin.io.exe` fails the build instead of shipping. That check exists because a renamed payload installs fine and then leaves a dead shortcut behind.
 
 An earlier build renamed the installed identity to match the public name, so a machine carrying that build has a package called `dayglass` and a desktop entry pointing at a directory that no longer exists. Installing this build is a separate package, not an upgrade: remove the old one first (`sudo apt remove dayglass` or `sudo dnf remove dayglass` on Linux, uninstall from Apps on Windows) before installing `scrinio`.
 
@@ -145,7 +147,7 @@ git tag v6.23.0-liberal.1
 git push origin v6.23.0-liberal.1
 ```
 
-The tag builds every target in the matrix, attaches the five artifacts to the release, and is the only supported way to publish. `workflow_dispatch` runs the matrix without a release, which is the cheap way to check an anchor change before tagging.
+The tag builds every target in the matrix, attaches the seven artifacts to the release, and is the only supported way to publish. `workflow_dispatch` runs the matrix without a release, which is the cheap way to check an anchor change before tagging.
 
 Windows installers are unsigned. macOS bundles are unsigned and not notarized, so the first launch requires the usual override in System Settings. Linux packages install normally.
 

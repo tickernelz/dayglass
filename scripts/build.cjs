@@ -141,16 +141,17 @@ const assertZipIdentity = (zipPath, bundle) => {
 };
 
 const assertRpmIdentity = (rpmPath, identity) => {
-  const name = execFileSync("rpm", ["-qp", "--queryformat", "%{NAME}", rpmPath], { encoding: "utf8" }).trim();
+  const [name, version] = execFileSync("rpm", ["-qp", "--queryformat", "%{NAME} %{VERSION}", rpmPath], { encoding: "utf8" }).trim().split(" ");
   if (name !== identity) throw new Error("artifact package name is " + name + ", expected " + identity);
-  console.log("  identity package=" + name + " (rpm)");
+  if (version !== CFG.version) throw new Error("artifact version is " + version + ", expected " + CFG.version);
+  console.log("  identity package=" + name + " version=" + version + " (rpm)");
 };
 
 const repackRpm = (target, out, meta) => {
   const identity = CFG.identity.linux;
   const rpmArch = target.arch === "amd64" ? "x86_64" : target.arch === "arm64" ? "aarch64" : target.arch;
   const rpmVersion = CFG.version;
-  const rpmRelease = (CFG.releaseSuffix || "1").replace(/-/g, ".");
+  const rpmRelease = CFG.releaseSuffix ? "1." + CFG.releaseSuffix.replace(/-/g, ".") : "1";
 
   const topdir = path.join(WORK, "rpmbuild-" + target.arch);
   rm(topdir);
@@ -175,7 +176,7 @@ const repackRpm = (target, out, meta) => {
     "Summary: " + identity + " time tracking client (patched build)",
     "License: " + (meta.license || "Proprietary"),
     "URL: " + (meta.homepage || "https://" + CFG.identity.appId + "/"),
-    "Requires: gtk3, nss, alsa-lib, libnotify, libsecret, libXScrnSaver, libXtst",
+    "Requires: gtk3, nss, alsa-lib, libnotify, libsecret, libXScrnSaver, libXtst, libuuid, at-spi2-core, xdg-utils",
     "Recommends: flameshot, grim, gnome-screenshot, scrot, xdg-desktop-portal, xdg-desktop-portal-wlr, xdg-desktop-portal-gnome",
     "",
     "%description",
@@ -184,24 +185,16 @@ const repackRpm = (target, out, meta) => {
     "%install",
     "mkdir -p %{buildroot}",
     "cp -a " + dataDir + "/* %{buildroot}/",
-    "",
-    "%post",
-    "if [ -d /opt/" + identity + " ]; then",
-    "    if [ ! -L /usr/bin/" + identity + " ]; then",
-    "        ln -sf /opt/" + identity + "/" + identity + " /usr/bin/" + identity,
-    "    fi",
-    "fi",
-    "",
-    "%postun",
-    "if [ \"$1\" = \"0\" ]; then",
-    "    rm -f /usr/bin/" + identity,
-    "fi",
+    "chmod 4755 %{buildroot}/opt/" + identity + "/chrome-sandbox",
+    "mkdir -p %{buildroot}/usr/bin",
+    "ln -s /opt/" + identity + "/" + identity + " %{buildroot}/usr/bin/" + identity,
     "",
     "%files",
     "/opt/" + identity,
+    "/usr/bin/" + identity,
     "/usr/share/applications/" + identity + ".desktop",
     "/usr/share/icons/hicolor/*/apps/" + identity + ".png",
-    "/usr/share/doc/" + identity + "/*",
+    "/usr/share/doc/" + identity,
     "",
   ].join("\n");
 
