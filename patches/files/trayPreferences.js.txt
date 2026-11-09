@@ -50,13 +50,15 @@ const hasStatusNotifierHost = () => {
         return false;
     }
 };
-export const needsXWaylandForTray = ({ platform = process.platform, env = process.env, argv = process.argv, preferences = getTrayPreferences(), } = {}) => platform === "linux" &&
+export const needsXWaylandForTray = ({ platform = process.platform, env = process.env, argv = process.argv, preferences = getTrayPreferences(), hostAvailable = hasStatusNotifierHost, } = {}) => platform === "linux" &&
     env.XDG_SESSION_TYPE === "wayland" &&
     !argv.some((arg) => arg.startsWith("--ozone-platform")) &&
     preferences.minimizeToTray &&
-    // GNOME Wayland exposes no tray host, so relaunching through XWayland
-    // only strands the window behind an icon that can never render.
-    !isGnomeDesktop(env);
+    // GNOME Wayland exposes no tray host by default, so relaunching through
+    // XWayland would only strand the window behind an icon that can never
+    // render. With a StatusNotifier host present the relaunch keeps the tray
+    // usable, so only skip it when GNOME has nowhere to render the icon.
+    (!isGnomeDesktop(env) || hostAvailable());
 export const trayUnavailableWarning = ({ platform = process.platform, env = process.env, preferences = getTrayPreferences(), hostAvailable = hasStatusNotifierHost, } = {}) => platform === "linux" &&
     env.XDG_SESSION_TYPE === "wayland" &&
     isGnomeDesktop(env) &&
