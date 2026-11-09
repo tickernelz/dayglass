@@ -110,6 +110,7 @@ const staticChecks = [
   ["linux minimize to tray hides the window", /window\.setSkipTaskbar\(!isEnabled\);\s*if \(isLinux && !isEnabled\)\s*window\.hide\(\);/.test(mainFile("dist-main/main/registerIPCHandlers.js"))],
   ["minimize events reach the renderer on linux", mainFile("dist-main/main/minimizeHandler.js").includes("if (!isWindows && !isLinux)")],
   ["xwayland relaunch runs before the single instance lock", mainFile("dist-main/main/main.js").includes("const gotLock = !relaunchUnderXWaylandForTray() && app.requestSingleInstanceLock();")],
+  ["tray missing-host warning wired after ready", mainFile("dist-main/main/main.js").includes("warnTrayUnavailable();")],
   ["tray open restores a minimized window", mainFile("dist-main/main/tray.js").includes("if (mainWindow.isMinimized())\n                    mainWindow.restore();")],
   ["tray quit reveals a hidden window first", /if \(mainWindow && !mainWindow\.isVisible\(\)\) \{\s*mainWindow\.show\(\);\s*mainWindow\.focus\(\);\s*\}\s*app\.quit\(\);/.test(mainFile("dist-main/main/tray.js"))],
   ["sharp worker forks the resolved runtime", mainFile("dist-main/main/utils/screenshot/runSharpWorker.js").includes("execPath: runtime.execPath,")],
@@ -466,6 +467,7 @@ const trayChecks = () => {
         "app.getPath = () => process.env.TRAY_USER_DATA;",
         "app.quit = () => app.emit('before-quit');",
         "exports.app = app;",
+        "exports.Notification = class { show() {} };",
         "exports.autoUpdater = new EventEmitter();",
       ].join("\n"),
       "utils/ipc.js": "export const sent = [];\nexport const ipcMainHandle = () => {};\nexport const ipcWebContentsSend = (key) => sent.push(key);",
@@ -475,7 +477,7 @@ const trayChecks = () => {
         'import { app } from "electron";',
         'import { sent } from "./utils/ipc.js";',
         'import { setupQuitHandler } from "./quitHandler.js";',
-        'import { getTrayPreferences, setTrayPreferences, needsXWaylandForTray } from "./trayPreferences.js";',
+        'import { getTrayPreferences, setTrayPreferences, needsXWaylandForTray, trayUnavailableWarning } from "./trayPreferences.js";',
         "const out = { loaded: getTrayPreferences() };",
         "if (process.env.TRAY_PHASE === 'write') {",
         "  out.merged = setTrayPreferences({ closeToTray: true });",
@@ -515,6 +517,9 @@ const trayChecks = () => {
         "    needsXWaylandForTray({ platform: 'linux', env: ubuntuGnome, argv: ['scrinio'], preferences: on }),",
         "    needsXWaylandForTray({ platform: 'linux', env: kde, argv: ['scrinio'], preferences: on }),",
         "  ];",
+        "  out.warnNoHost = trayUnavailableWarning({ platform: 'linux', env: gnome, preferences: on, hostAvailable: () => false });",
+        "  out.warnWithHost = trayUnavailableWarning({ platform: 'linux', env: gnome, preferences: on, hostAvailable: () => true });",
+        "  out.warnNoHostNotGnome = trayUnavailableWarning({ platform: 'linux', env: kde, preferences: on, hostAvailable: () => false });",
         "}",
         "console.log(JSON.stringify(out));",
       ].join("\n"),
@@ -544,6 +549,7 @@ const trayChecks = () => {
       ["quit from the tray still reaches the quit flow", stored.quitPrevented && same(stored.quitSent, ["quitApp", "quitApp"]) && stored.quitHidden === 1],
       ["window close hides again after a cancelled quit", stored.afterQuitPrevented && same(stored.afterQuitSent, ["quitApp", "quitApp"]) && stored.afterQuitHidden === 2],
       ["xwayland only for minimize to tray on a wayland session without an ozone override", same(stored.xwayland, [true, false, false, false, false, false, false, false, true])],
+      ["tray warning only on GNOME Wayland without a status-notifier host", same([stored.warnNoHost, stored.warnWithHost, stored.warnNoHostNotGnome], [true, false, false])],
     ];
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });

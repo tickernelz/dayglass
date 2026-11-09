@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { app } from "electron";
+import { execFileSync } from "node:child_process";
+import { app, Notification } from "electron";
 import log from "electron-log";
 const KEYS = ["minimizeToTray", "closeToTray"];
 let current = null;
@@ -35,6 +36,20 @@ export const setTrayPreferences = (update) => {
     return next;
 };
 const isGnomeDesktop = (env) => (env.XDG_CURRENT_DESKTOP || "").toLowerCase().includes("gnome");
+const hasStatusNotifierHost = () => {
+    try {
+        const names = execFileSync("gdbus", [
+            "call", "--session",
+            "--dest", "org.freedesktop.DBus",
+            "--object-path", "/org/freedesktop/DBus",
+            "--method", "org.freedesktop.DBus.ListNames",
+        ], { timeout: 1500, stdio: ["ignore", "pipe", "ignore"] }).toString();
+        return names.includes("StatusNotifierWatcher");
+    }
+    catch {
+        return false;
+    }
+};
 export const needsXWaylandForTray = ({ platform = process.platform, env = process.env, argv = process.argv, preferences = getTrayPreferences(), } = {}) => platform === "linux" &&
     env.XDG_SESSION_TYPE === "wayland" &&
     !argv.some((arg) => arg.startsWith("--ozone-platform")) &&
@@ -42,6 +57,24 @@ export const needsXWaylandForTray = ({ platform = process.platform, env = proces
     // GNOME Wayland exposes no tray host, so relaunching through XWayland
     // only strands the window behind an icon that can never render.
     !isGnomeDesktop(env);
+export const trayUnavailableWarning = ({ platform = process.platform, env = process.env, preferences = getTrayPreferences(), hostAvailable = hasStatusNotifierHost, } = {}) => platform === "linux" &&
+    env.XDG_SESSION_TYPE === "wayland" &&
+    isGnomeDesktop(env) &&
+    preferences.minimizeToTray &&
+    !hostAvailable();
+export const warnTrayUnavailable = () => {
+    if (!trayUnavailableWarning())
+        return;
+    try {
+        new Notification({
+            title: "System tray unavailable",
+            body: "Minimize to tray is on, but this desktop has no tray. The window stays visible instead. Install the AppIndicator extension to use the tray.",
+        }).show();
+    }
+    catch {
+        // Notifications are best-effort; never block startup.
+    }
+};
 export const relaunchUnderXWaylandForTray = () => {
     if (!needsXWaylandForTray())
         return false;

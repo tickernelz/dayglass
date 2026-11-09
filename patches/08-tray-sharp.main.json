@@ -69,13 +69,19 @@
     "id": "xwayland-relaunch-import",
     "file": "dist-main/main/main.js",
     "old": "import { setupTray, destroyTray } from \"./tray.js\";\n",
-    "new": "import { setupTray, destroyTray } from \"./tray.js\";\nimport { relaunchUnderXWaylandForTray } from \"./trayPreferences.js\";\n"
+    "new": "import { setupTray, destroyTray } from \"./tray.js\";\nimport { relaunchUnderXWaylandForTray, warnTrayUnavailable } from \"./trayPreferences.js\";\n"
   },
   {
     "id": "xwayland-relaunch-before-lock",
     "file": "dist-main/main/main.js",
     "old": "const gotLock = app.requestSingleInstanceLock();",
     "new": "const gotLock = !relaunchUnderXWaylandForTray() && app.requestSingleInstanceLock();"
+  },
+  {
+    "id": "tray-warning-after-ready",
+    "file": "dist-main/main/main.js",
+    "old": "    log.info(`Main window ready in ${performance.getEntriesByName(\"mainWindowReady\")[0].duration}ms`);\n});",
+    "new": "    log.info(`Main window ready in ${performance.getEntriesByName(\"mainWindowReady\")[0].duration}ms`);\n    warnTrayUnavailable();\n});"
   },
   {
     "id": "tray-preferences-bridge",
