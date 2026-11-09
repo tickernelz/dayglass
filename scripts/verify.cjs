@@ -501,6 +501,9 @@ const trayChecks = () => {
         "  out.afterQuitSent = sent.slice(); out.afterQuitHidden = win.hidden;",
         "  const on = { minimizeToTray: true, closeToTray: false };",
         "  const wayland = { XDG_SESSION_TYPE: 'wayland' };",
+        "  const gnome = { ...wayland, XDG_CURRENT_DESKTOP: 'GNOME' };",
+        "  const ubuntuGnome = { ...wayland, XDG_CURRENT_DESKTOP: 'ubuntu:GNOME' };",
+        "  const kde = { ...wayland, XDG_CURRENT_DESKTOP: 'KDE' };",
         "  out.xwayland = [",
         "    needsXWaylandForTray({ platform: 'linux', env: wayland, argv: ['scrinio'], preferences: on }),",
         "    needsXWaylandForTray({ platform: 'linux', env: wayland, argv: ['scrinio', '--ozone-platform=x11'], preferences: on }),",
@@ -508,6 +511,9 @@ const trayChecks = () => {
         "    needsXWaylandForTray({ platform: 'linux', env: { XDG_SESSION_TYPE: 'x11' }, argv: ['scrinio'], preferences: on }),",
         "    needsXWaylandForTray({ platform: 'linux', env: wayland, argv: ['scrinio'], preferences: { minimizeToTray: false } }),",
         "    needsXWaylandForTray({ platform: 'win32', env: wayland, argv: ['scrinio'], preferences: on }),",
+        "    needsXWaylandForTray({ platform: 'linux', env: gnome, argv: ['scrinio'], preferences: on }),",
+        "    needsXWaylandForTray({ platform: 'linux', env: ubuntuGnome, argv: ['scrinio'], preferences: on }),",
+        "    needsXWaylandForTray({ platform: 'linux', env: kde, argv: ['scrinio'], preferences: on }),",
         "  ];",
         "}",
         "console.log(JSON.stringify(out));",
@@ -537,7 +543,7 @@ const trayChecks = () => {
       ["close hides to tray when close to tray is on", stored.onPrevented && same(stored.onSent, ["quitApp"]) && stored.onHidden === 1],
       ["quit from the tray still reaches the quit flow", stored.quitPrevented && same(stored.quitSent, ["quitApp", "quitApp"]) && stored.quitHidden === 1],
       ["window close hides again after a cancelled quit", stored.afterQuitPrevented && same(stored.afterQuitSent, ["quitApp", "quitApp"]) && stored.afterQuitHidden === 2],
-      ["xwayland only for minimize to tray on a wayland session without an ozone override", same(stored.xwayland, [true, false, false, false, false, false])],
+      ["xwayland only for minimize to tray on a wayland session without an ozone override", same(stored.xwayland, [true, false, false, false, false, false, false, false, true])],
     ];
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });

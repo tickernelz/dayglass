@@ -34,10 +34,14 @@ export const setTrayPreferences = (update) => {
     }
     return next;
 };
+const isGnomeDesktop = (env) => (env.XDG_CURRENT_DESKTOP || "").toLowerCase().includes("gnome");
 export const needsXWaylandForTray = ({ platform = process.platform, env = process.env, argv = process.argv, preferences = getTrayPreferences(), } = {}) => platform === "linux" &&
     env.XDG_SESSION_TYPE === "wayland" &&
     !argv.some((arg) => arg.startsWith("--ozone-platform")) &&
-    preferences.minimizeToTray;
+    preferences.minimizeToTray &&
+    // GNOME Wayland exposes no tray host, so relaunching through XWayland
+    // only strands the window behind an icon that can never render.
+    !isGnomeDesktop(env);
 export const relaunchUnderXWaylandForTray = () => {
     if (!needsXWaylandForTray())
         return false;
