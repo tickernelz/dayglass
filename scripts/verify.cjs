@@ -113,6 +113,7 @@ const staticChecks = [
   ["tray missing-host warning wired after ready", mainFile("dist-main/main/main.js").includes("warnTrayUnavailable();")],
   ["tray open restores a minimized window", mainFile("dist-main/main/tray.js").includes("if (mainWindow.isMinimized())\n                    mainWindow.restore();")],
   ["tray quit reveals a hidden window first", /if \(mainWindow && !mainWindow\.isVisible\(\)\) \{\s*mainWindow\.show\(\);\s*mainWindow\.focus\(\);\s*\}\s*app\.quit\(\);/.test(mainFile("dist-main/main/tray.js"))],
+  ["linux tray left-click toggles the window", mainFile("dist-main/main/tray.js").includes("XEmbed tray icons fire")],
   ["sharp worker forks the resolved runtime", mainFile("dist-main/main/utils/screenshot/runSharpWorker.js").includes("execPath: runtime.execPath,")],
   ["screenshot skips sharp without a runtime", mainFile("dist-main/main/utils/screenshot/takeScreenshot.js").includes("if (sharpHealthy !== true && !(await resolveSharpWorkerRuntime())) {")],
 ];
