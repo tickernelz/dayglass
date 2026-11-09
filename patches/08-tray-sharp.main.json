@@ -48,6 +48,12 @@
     "new": "        label: \"Quit\",\n        click: () => {\n            const mainWindow = getMainWindow();\n            if (mainWindow && !mainWindow.isVisible()) {\n                mainWindow.show();\n                mainWindow.focus();\n            }\n            app.quit();\n        },"
   },
   {
+    "id": "tray-linux-click-shows-window",
+    "file": "dist-main/main/tray.js",
+    "old": "        // Keep left-click behavior for show/hide on non-Linux only\n        if (!isLinux) {\n            trayInstance.on(\"click\", () => {\n                const mainWindow = getMainWindow();\n                if (mainWindow) {\n                    showHideWindow(mainWindow);\n                }\n            });\n        }",
+    "new": "        // Left-click toggles the window on every platform so the app can always\n        // be brought back from the tray (XEmbed tray icons fire \"click\" on Linux).\n        trayInstance.on(\"click\", () => {\n            const mainWindow = getMainWindow();\n            if (mainWindow) {\n                showHideWindow(mainWindow);\n            }\n        });"
+  },
+  {
     "id": "tray-ipc-imports",
     "file": "dist-main/main/registerIPCHandlers.js",
     "old": "import { isMac } from \"./utils/platform.js\";\n",
@@ -69,13 +75,19 @@
     "id": "xwayland-relaunch-import",
     "file": "dist-main/main/main.js",
     "old": "import { setupTray, destroyTray } from \"./tray.js\";\n",
-    "new": "import { setupTray, destroyTray } from \"./tray.js\";\nimport { relaunchUnderXWaylandForTray } from \"./trayPreferences.js\";\n"
+    "new": "import { setupTray, destroyTray } from \"./tray.js\";\nimport { relaunchUnderXWaylandForTray, warnTrayUnavailable } from \"./trayPreferences.js\";\n"
   },
   {
     "id": "xwayland-relaunch-before-lock",
     "file": "dist-main/main/main.js",
     "old": "const gotLock = app.requestSingleInstanceLock();",
     "new": "const gotLock = !relaunchUnderXWaylandForTray() && app.requestSingleInstanceLock();"
+  },
+  {
+    "id": "tray-warning-after-ready",
+    "file": "dist-main/main/main.js",
+    "old": "    log.info(`Main window ready in ${performance.getEntriesByName(\"mainWindowReady\")[0].duration}ms`);\n});",
+    "new": "    log.info(`Main window ready in ${performance.getEntriesByName(\"mainWindowReady\")[0].duration}ms`);\n    warnTrayUnavailable();\n});"
   },
   {
     "id": "tray-preferences-bridge",
