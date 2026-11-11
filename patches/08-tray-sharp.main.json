@@ -51,7 +51,7 @@
     "id": "tray-linux-click-shows-window",
     "file": "dist-main/main/tray.js",
     "old": "        // Keep left-click behavior for show/hide on non-Linux only\n        if (!isLinux) {\n            trayInstance.on(\"click\", () => {\n                const mainWindow = getMainWindow();\n                if (mainWindow) {\n                    showHideWindow(mainWindow);\n                }\n            });\n        }",
-    "new": "        // Left-click toggles the window on every platform so the app can always\n        // be brought back from the tray (XEmbed tray icons fire \"click\" on Linux).\n        trayInstance.on(\"click\", () => {\n            const mainWindow = getMainWindow();\n            if (mainWindow) {\n                showHideWindow(mainWindow);\n            }\n        });"
+    "new": "        // Keep left-click toggle behavior on non-Linux platforms\n        if (!isLinux) {\n            trayInstance.on(\"click\", () => {\n                const mainWindow = getMainWindow();\n                if (mainWindow) {\n                    showHideWindow(mainWindow);\n                }\n            });\n        }\n        else {\n            // Linux XEmbed tray fires \"click\" on left-click; always bring the window\n            // back and never hide on click, or an in-flight restore would be\n            // minimized straight back into the tray.\n            trayInstance.on(\"click\", () => {\n                const mainWindow = getMainWindow();\n                if (mainWindow && !mainWindow.isVisible()) {\n                    if (mainWindow.isMinimized())\n                        mainWindow.restore();\n                    mainWindow.show();\n                    mainWindow.focus();\n                }\n            });\n        }"
   },
   {
     "id": "tray-ipc-imports",
@@ -66,10 +66,10 @@
     "new": "import { setTrayTrackingState } from \"./tray.js\";\nimport { setTrayPreferences } from \"./trayPreferences.js\";\n"
   },
   {
-    "id": "linux-minimize-hides-window",
+    "id": "linux-minimize-keeps-window",
     "file": "dist-main/main/registerIPCHandlers.js",
     "old": "        else {\n            window.setSkipTaskbar(!isEnabled);\n        }\n    });\n",
-    "new": "        else {\n            window.setSkipTaskbar(!isEnabled);\n            if (isLinux && !isEnabled)\n                window.hide();\n        }\n    });\n    ipcMainHandle(\"setTrayPreferences\", (preferences) => {\n        setTrayPreferences(preferences);\n    });\n"
+    "new": "        else {\n            window.setSkipTaskbar(!isEnabled);\n        }\n    });\n    ipcMainHandle(\"setTrayPreferences\", (preferences) => {\n        setTrayPreferences(preferences);\n    });\n"
   },
   {
     "id": "xwayland-relaunch-import",
