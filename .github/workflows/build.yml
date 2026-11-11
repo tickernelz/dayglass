@@ -31,7 +31,7 @@ jobs:
             os: macos-15-intel
             artifact: dayglass-*-mac-x64.zip
           - target: mac-arm64
-            os: macos-14
+            os: macos-15
             artifact: dayglass-*-mac-arm64.zip
           - target: win-x64
             os: windows-2022
