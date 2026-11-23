@@ -20,6 +20,8 @@ Patch definitions are declarative and live in `patches/`. Three shapes exist.
 
 `{{APP}}` is the product string the bundle prints in its own UI labels. Use it whenever a patch needs to match or emit that name.
 
+**Snippet include** — a replacement can embed a file from `patches/snippets/` with `{{include:name.js.txt}}`. Placeholders inside the snippet are resolved after the include. Use it for multi-line logic that would be unreadable as a JSON string, and check it with `node --check` after replacing the placeholders.
+
 ## Rules the patcher enforces
 
 - Every exact patch must match exactly once. Zero or multiple matches abort the whole run and nothing is written.
