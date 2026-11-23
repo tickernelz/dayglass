@@ -1,0 +1,74 @@
+[
+  {
+    "id": "schedule-functions",
+    "file": "@renderer:js",
+    "old": "var {{WC}}=`releaseData`,",
+    "new": "{{include:schedule.js.txt}}\nvar {{WC}}=`releaseData`,"
+  },
+  {
+    "id": "schedule-start",
+    "file": "@renderer:js",
+    "old": "this.checkUpdateInstalled(),this.pollPowerMode()}syncTrayTrackingState(){",
+    "new": "dgScheduleStart(this.rootContext),this.checkUpdateInstalled(),this.pollPowerMode()}syncTrayTrackingState(){"
+  },
+  {
+    "id": "schedule-enum",
+    "file": "@renderer:js",
+    "old": "e.CLOSE_TO_TRAY=`closeToTray`,e}",
+    "new": "e.CLOSE_TO_TRAY=`closeToTray`,e.SCHEDULE_ON_TIME=`scheduleOnTime`,e.SCHEDULE_OFF_TIME=`scheduleOffTime`,e}"
+  },
+  {
+    "id": "schedule-default",
+    "file": "@renderer:js",
+    "old": "[{{K}}.CLOSE_TO_TRAY]:!1,displays:[]",
+    "new": "[{{K}}.CLOSE_TO_TRAY]:!1,[{{K}}.SCHEDULE_ON_TIME]:``,[{{K}}.SCHEDULE_OFF_TIME]:``,displays:[]"
+  },
+  {
+    "id": "schedule-setting-key",
+    "file": "@renderer:js",
+    "old": "e.CloseToTray=`closeToTray`,e.IsAutoStartEnabled=",
+    "new": "e.CloseToTray=`closeToTray`,e.ScheduleOnTime=`scheduleOnTime`,e.ScheduleOffTime=`scheduleOffTime`,e.ScheduleApplied=`scheduleApplied`,e.ScheduleSignature=`scheduleSignature`,e.IsAutoStartEnabled="
+  },
+  {
+    "id": "schedule-provider-destructure",
+    "file": "@renderer:js",
+    "old": "leadSetting,closeSetting]=await Promise.all([",
+    "new": "leadSetting,closeSetting,scheduleOn,scheduleOff]=await Promise.all(["
+  },
+  {
+    "id": "schedule-provider-load",
+    "file": "@renderer:js",
+    "old": "r.getValue({{gs}}.CloseToTray)]);window.mainAPI.setTrayPreferences(",
+    "new": "r.getValue({{gs}}.CloseToTray),r.getValue({{gs}}.ScheduleOnTime),r.getValue({{gs}}.ScheduleOffTime)]);window.mainAPI.setTrayPreferences("
+  },
+  {
+    "id": "schedule-provider-value",
+    "file": "@renderer:js",
+    "old": "[{{K}}.CLOSE_TO_TRAY]:closeSetting??{{Po}}[{{K}}.CLOSE_TO_TRAY],displays:",
+    "new": "[{{K}}.CLOSE_TO_TRAY]:closeSetting??{{Po}}[{{K}}.CLOSE_TO_TRAY],[{{K}}.SCHEDULE_ON_TIME]:typeof scheduleOn==`string`?scheduleOn:{{Po}}[{{K}}.SCHEDULE_ON_TIME],[{{K}}.SCHEDULE_OFF_TIME]:typeof scheduleOff==`string`?scheduleOff:{{Po}}[{{K}}.SCHEDULE_OFF_TIME],displays:"
+  },
+  {
+    "id": "schedule-update-setting",
+    "file": "@renderer:js",
+    "old": "else if(e==={{K}}.CLOSE_TO_TRAY){await r.setValue({{gs}}.CloseToTray,i),",
+    "new": "else if(e==={{K}}.SCHEDULE_ON_TIME){await r.setValue({{gs}}.ScheduleOnTime,i)}else if(e==={{K}}.SCHEDULE_OFF_TIME){await r.setValue({{gs}}.ScheduleOffTime,i)}else if(e==={{K}}.CLOSE_TO_TRAY){await r.setValue({{gs}}.CloseToTray,i),"
+  },
+  {
+    "id": "schedule-ui-destructure",
+    "file": "@renderer:js",
+    "old": "closeToTray:closeToTray,displays:L=[]}=e,",
+    "new": "closeToTray:closeToTray,scheduleOnTime:schedOn,scheduleOffTime:schedOff,displays:L=[]}=e,"
+  },
+  {
+    "id": "schedule-ui-rows",
+    "file": "@renderer:js",
+    "old": "disabledTooltip:`Idle detection is disabled`}];",
+    "new": "disabledTooltip:`Idle detection is disabled`},{section:`Schedule`},{render:{{include:scheduleRender.js.txt}}}];"
+  },
+  {
+    "id": "schedule-class-map",
+    "file": "@renderer:js",
+    "old": "scopeNote:`_scopeNote_o11y_17`}",
+    "new": "scopeNote:`_scopeNote_o11y_17`,scheduleToggle:`_scheduleToggle_o11y_18`,timeInput:`_timeInput_o11y_19`}"
+  }
+]

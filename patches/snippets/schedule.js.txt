@@ -1,0 +1,46 @@
+function dgScheduleMinutes(value){
+let match=/^([01]\d|2[0-3]):([0-5]\d)$/.exec(typeof value===`string`?value:``);
+return match?Number(match[1])*60+Number(match[2]):null
+}
+function dgScheduleLabel(value){
+let minutes=dgScheduleMinutes(value);
+return minutes===null?``:new Date(2e3,0,1,Math.floor(minutes/60),minutes%60).toLocaleTimeString([],{hour:`numeric`,minute:`2-digit`})
+}
+function dgScheduleLatest(on,off,now){
+let events=[];
+for(let[value,type]of[[on,`on`],[off,`off`]]){
+let minutes=dgScheduleMinutes(value);
+if(minutes===null)continue;
+for(let shift=-1;shift<=0;shift++){
+let at=new Date(now.getFullYear(),now.getMonth(),now.getDate()+shift,Math.floor(minutes/60),minutes%60,0,0);
+at.getTime()<=now.getTime()&&events.push({at:at.getTime(),type,time:value,key:`${at.getFullYear()}-${at.getMonth()+1}-${at.getDate()}@${value}:${type}`})
+}
+}
+events.sort((a,b)=>a.at-b.at||(a.type===`off`?1:-1)-(b.type===`off`?1:-1));
+return events.length?events[events.length-1]:null
+}
+async function dgScheduleTick(ctx,now){
+let vars=ctx.varsRepository,flow=ctx.workflow;
+if(flow.state===0)return null;
+let on=await vars.getValue({{gs}}.ScheduleOnTime),off=await vars.getValue({{gs}}.ScheduleOffTime);
+on=dgScheduleMinutes(on)===null?``:on;
+off=dgScheduleMinutes(off)===null?``:off;
+let signature=`${on}|${off}`,latest=dgScheduleLatest(on,off,now);
+if(await vars.getValue({{gs}}.ScheduleSignature)!==signature){
+await vars.setValue({{gs}}.ScheduleApplied,latest?latest.key:``);
+await vars.setValue({{gs}}.ScheduleSignature,signature);
+return null
+}
+if(!latest||latest.key===await vars.getValue({{gs}}.ScheduleApplied))return null;
+await vars.setValue({{gs}}.ScheduleApplied,latest.key);
+let starting=latest.type===`on`;
+if(starting?flow.state!==1:flow.state!==2&&flow.state!==3)return `skipped`;
+starting?await flow.startTracking({note:flow.currentNote,projectId:flow.currentProjectId}):flow.stopTracking();
+if(starting?flow.state!==2:flow.state!==1)return `failed`;
+window.mainAPI.showSystemNotification({title:starting?`Timer started by your schedule`:`Timer stopped by your schedule`,message:`Scheduled for ${dgScheduleLabel(latest.time)}.`}).catch(()=>{});
+return starting?`started`:`stopped`
+}
+function dgScheduleStart(ctx){
+let busy=!1,run=()=>{busy||(busy=!0,dgScheduleTick(ctx,new Date).catch(error=>console.error(`Schedule check failed:`,error)).finally(()=>{busy=!1}))};
+setTimeout(run,5e3),setInterval(run,3e4)
+}

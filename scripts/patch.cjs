@@ -59,10 +59,14 @@ const applyWrite = (target, patches, label) => {
   }
 };
 
+const SNIPPETS = path.join(PATCHES, "snippets");
+const includeSnippets = (text) =>
+  text.replace(/\{\{include:([\w.-]+)\}\}/g, (m, name) => fs.readFileSync(path.join(SNIPPETS, name), "utf8").trim());
+
 const resolveEntries = (entries, ids) =>
   entries.map((p) =>
     ids && p.old !== undefined
-      ? { ...p, old: substitute(p.old, ids), new: substitute(p.new, ids) }
+      ? { ...p, old: substitute(p.old, ids), new: substitute(includeSnippets(p.new), ids) }
       : p
   );
 
@@ -116,6 +120,7 @@ const main = (appDir) => {
   applyMixed(dir, readJson("07-monitor-crop.main.json"), "monitor-crop", null);
   applyMixed(dir, readJson("08-tray-sharp.main.json"), "tray-sharp", null);
   applyMixed(dir, readJson("09-tray.renderer.json"), "tray-ui", ids);
+  applyMixed(dir, readJson("12-schedule.renderer.json"), "schedule", ids);
 
   const cssFile = rendererAsset(dir, "css");
   const cssAdd = fs.readFileSync(path.join(PATCHES, "03-monitor-idle.css.txt"), "utf8");
@@ -125,6 +130,15 @@ const main = (appDir) => {
     console.log("  ok css monitor-idle styles appended");
   } else {
     console.log("  skip css (already present)");
+  }
+
+  const scheduleCss = fs.readFileSync(path.join(PATCHES, "12-schedule.css.txt"), "utf8");
+  const current = fs.readFileSync(cssFile, "utf8");
+  if (!current.includes("_timeInput_o11y_19")) {
+    fs.writeFileSync(cssFile, current + scheduleCss);
+    console.log("  ok css schedule styles appended");
+  } else {
+    console.log("  skip css schedule (already present)");
   }
 
   console.log("patched: " + dir);
