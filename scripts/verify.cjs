@@ -115,6 +115,14 @@ const staticChecks = [
   ["tray quit reveals a hidden window first", /if \(mainWindow && !mainWindow\.isVisible\(\)\) \{\s*mainWindow\.show\(\);\s*mainWindow\.focus\(\);\s*\}\s*app\.quit\(\);/.test(mainFile("dist-main/main/tray.js"))],
   ["linux tray left-click restores the window", mainFile("dist-main/main/tray.js").includes("never hide on click")],
   ["sharp worker forks the resolved runtime", mainFile("dist-main/main/utils/screenshot/runSharpWorker.js").includes("execPath: runtime.execPath,")],
+  ["schedule functions injected", jsSrc.includes("function dgScheduleMinutes(") && jsSrc.includes("async function dgScheduleTick(")],
+  ["schedule starts with the ui manager", jsSrc.includes("dgScheduleStart(this.rootContext),this.checkUpdateInstalled(),this.pollPowerMode()")],
+  ["workflow states keep the numbers the schedule relies on", jsSrc.includes("e[e.SignedOut=0]=`SignedOut`,e[e.Stopped=1]=`Stopped`,e[e.InProgress=2]=`InProgress`,e[e.Paused=3]=`Paused`")],
+  ["schedule times persisted", /setValue\([A-Za-z_$][\w$]*\.ScheduleOnTime,i\)/.test(jsSrc) && /setValue\([A-Za-z_$][\w$]*\.ScheduleOffTime,i\)/.test(jsSrc)],
+  ["schedule settings load with the other settings", /getValue\([A-Za-z_$][\w$]*\.ScheduleOnTime\),r\.getValue\([A-Za-z_$][\w$]*\.ScheduleOffTime\)/.test(jsSrc)],
+  ["schedule section in settings", jsSrc.includes("{section:`Schedule`},{render:")],
+  ["schedule styles in the stylesheet", cssSrc.includes("._timeInput_o11y_19") && cssSrc.includes("._scheduleToggle_o11y_18")],
+  ["schedule class names in the style map", jsSrc.includes("timeInput:`_timeInput_o11y_19`") && jsSrc.includes("scheduleToggle:`_scheduleToggle_o11y_18`")],
   ["screenshot skips sharp without a runtime", mainFile("dist-main/main/utils/screenshot/takeScreenshot.js").includes("if (sharpHealthy !== true && !(await resolveSharpWorkerRuntime())) {")],
 ];
 
@@ -644,6 +652,250 @@ const displayNameChecks = async () => {
   ];
 };
 
+const scheduleSource = () => {
+  const start = jsSrc.indexOf("function dgScheduleMinutes(");
+  if (start < 0) return null;
+  const tail = /setInterval\(run,3e4\)\s*\}/.exec(jsSrc.slice(start));
+  if (!tail) return null;
+  return jsSrc.slice(start, start + tail.index + tail[0].length);
+};
+
+const scheduleKeys = { ScheduleOnTime: "on", ScheduleOffTime: "off", ScheduleApplied: "applied", ScheduleSignature: "signature" };
+
+const loadSchedule = (overrides = {}) => {
+  const block = scheduleSource();
+  const gsName = /getValue\(([A-Za-z_$][\w$]*)\.HideFromTaskBar\)/.exec(jsSrc)[1];
+  const timers = { timeouts: [], intervals: [] };
+  const win = { mainAPI: { notes: [], showSystemNotification(note) { this.notes.push(note); return Promise.resolve(true); } } };
+  const fakeTimeout = (fn, ms) => timers.timeouts.push([fn, ms]);
+  const fakeInterval = (fn, ms) => timers.intervals.push([fn, ms]);
+  const api = new Function(
+    gsName, "window", "console", "setTimeout", "setInterval",
+    block + "; return { dgScheduleMinutes, dgScheduleLabel, dgScheduleLatest, dgScheduleTick, dgScheduleStart };"
+  )(scheduleKeys, win, overrides.console || console, fakeTimeout, fakeInterval);
+  return { api, win, timers };
+};
+
+const makeContext = (state, stored = {}) => {
+  const store = new Map(Object.entries(stored));
+  const writes = [];
+  const flow = {
+    state,
+    currentNote: "note",
+    currentProjectId: "project",
+    started: 0,
+    stopped: 0,
+    refuseStart: false,
+    async startTracking() {
+      this.started += 1;
+      if (!this.refuseStart && this.state === 1) this.state = 2;
+    },
+    stopTracking() {
+      this.stopped += 1;
+      if (this.state === 2 || this.state === 3) this.state = 1;
+    },
+  };
+  const ctx = {
+    workflow: flow,
+    varsRepository: {
+      getValue: async (key) => store.get(key),
+      setValue: async (key, value) => { writes.push([key, value]); store.set(key, value); },
+    },
+  };
+  return { ctx, flow, store, writes };
+};
+
+const at = (day, hour, minute, second = 0) => new Date(2026, 10, day, hour, minute, second);
+
+const scheduleChecks = async () => {
+  if (!scheduleSource()) return [["schedule block extractable from the bundle", false]];
+  const { api, win } = loadSchedule();
+  const checks = [];
+  const note = (name, ok) => checks.push([name, ok]);
+
+  note("schedule parses a valid time", api.dgScheduleMinutes("07:05") === 425 && api.dgScheduleMinutes("00:00") === 0 && api.dgScheduleMinutes("23:59") === 1439);
+  note("schedule rejects malformed times", ["24:00", "7:00", "07:60", "", "07-00", null, undefined, 700].every((v) => api.dgScheduleMinutes(v) === null));
+
+  const latest = (on, off, when) => api.dgScheduleLatest(on, off, when);
+  note("schedule has no event without times", latest("", "", at(23, 12, 0)) === null);
+  const beforeOn = latest("07:00", "", at(23, 6, 59));
+  note("schedule on-only before the time points at yesterday", beforeOn && beforeOn.type === "on" && beforeOn.key.startsWith("2026-11-22@"));
+  const atOn = latest("07:00", "", at(23, 7, 0));
+  note("schedule fires exactly at the minute", atOn && atOn.key === "2026-11-23@07:00:on");
+  note("schedule midday latest is the start", latest("07:00", "17:00", at(23, 12, 0)).type === "on");
+  note("schedule evening latest is the stop", latest("07:00", "17:00", at(23, 18, 0)).type === "off");
+  note("schedule equal times stop", latest("09:00", "09:00", at(23, 9, 30)).type === "off");
+  const night = latest("22:00", "06:00", at(23, 3, 0));
+  note("schedule overnight keeps yesterday's start at 03:00", night.type === "on" && night.key.startsWith("2026-11-22@"));
+  note("schedule overnight stops at 06:00", latest("22:00", "06:00", at(23, 7, 0)).type === "off");
+  note("schedule ignores a malformed time", latest("nope", "17:00", at(23, 18, 0)).type === "off");
+  note("schedule label follows the locale clock", /^\d{1,2}:\d{2}/.test(api.dgScheduleLabel("17:05")) && api.dgScheduleLabel("zz") === "");
+
+  const run = async (state, stored, when) => {
+    const env = makeContext(state, stored);
+    win.mainAPI.notes.length = 0;
+    const result = await api.dgScheduleTick(env.ctx, when);
+    return { ...env, result, notes: [...win.mainAPI.notes] };
+  };
+  const base = { on: "07:00", off: "17:00", signature: "07:00|17:00", applied: "2026-11-22@17:00:off" };
+
+  const signedOut = await run(0, { ...base }, at(23, 7, 0));
+  note("schedule waits while signed out", signedOut.result === null && signedOut.flow.started === 0 && signedOut.writes.length === 0);
+
+  const first = await run(2, { on: "07:00", off: "17:00" }, at(23, 18, 0));
+  note("schedule first run records a baseline without acting", first.result === null && first.flow.stopped === 0 && first.store.get("signature") === "07:00|17:00" && first.store.get("applied") === "2026-11-23@17:00:off");
+
+  const started = await run(1, { ...base }, at(23, 7, 0, 5));
+  note("schedule starts a stopped timer at the start time", started.result === "started" && started.flow.started === 1 && started.flow.state === 2);
+  note("schedule start passes the current note and project", started.flow.currentNote === "note" && started.flow.currentProjectId === "project");
+  note("schedule start announces itself", started.notes.length === 1 && /started by your schedule/.test(started.notes[0].title) && /\d/.test(started.notes[0].message));
+  const again = await run(1, { ...base, applied: started.store.get("applied") }, at(23, 7, 0, 35));
+  note("schedule does not repeat the same event", again.result === null && again.flow.started === 0);
+
+  const early = await run(1, { ...base }, at(23, 6, 59));
+  note("schedule does nothing before the start time", early.result === null && early.flow.started === 0);
+
+  const stopped = await run(2, { ...base, applied: "2026-11-23@07:00:on" }, at(23, 17, 0, 10));
+  note("schedule stops a running timer at the stop time", stopped.result === "stopped" && stopped.flow.stopped === 1 && stopped.flow.state === 1);
+  note("schedule stop announces itself", stopped.notes.length === 1 && /stopped by your schedule/.test(stopped.notes[0].title));
+  const stoppedPaused = await run(3, { ...base, applied: "2026-11-23@07:00:on" }, at(23, 17, 0));
+  note("schedule stops a paused timer too", stoppedPaused.result === "stopped" && stoppedPaused.flow.state === 1);
+
+  const manual = await run(2, { ...base, applied: "2026-11-23@17:00:off" }, at(23, 17, 31));
+  note("schedule leaves a timer started by hand after the stop time", manual.result === null && manual.flow.stopped === 0 && manual.flow.state === 2);
+  const manualStop = await run(1, { ...base, applied: "2026-11-23@07:00:on" }, at(23, 10, 0));
+  note("schedule leaves a timer stopped by hand after the start time", manualStop.result === null && manualStop.flow.started === 0);
+
+  const alreadyOn = await run(2, { ...base }, at(23, 7, 0));
+  note("schedule start on a running timer is skipped and consumed", alreadyOn.result === "skipped" && alreadyOn.flow.started === 0 && alreadyOn.store.get("applied") === "2026-11-23@07:00:on");
+  const pausedOn = await run(3, { ...base }, at(23, 7, 0));
+  note("schedule start leaves a paused timer to resume itself", pausedOn.result === "skipped" && pausedOn.flow.started === 0);
+  const stoppedOff = await run(1, { ...base, applied: "2026-11-23@07:00:on" }, at(23, 17, 0));
+  note("schedule stop on a stopped timer is skipped", stoppedOff.result === "skipped" && stoppedOff.flow.stopped === 0 && stoppedOff.notes.length === 0);
+
+  const changed = await run(2, { ...base, signature: "|", applied: "" }, at(23, 18, 0));
+  note("schedule saved after the stop time does not stop the timer", changed.result === null && changed.flow.stopped === 0 && changed.flow.state === 2);
+  const nextDay = await run(2, { ...base, applied: changed.store.get("applied") }, at(24, 17, 0));
+  note("schedule applies from the next stop time after a change", nextDay.result === "stopped");
+  const edited = await run(2, { ...base, on: "08:00", signature: "07:00|17:00" }, at(23, 8, 30));
+  note("schedule editing a time re-baselines instead of firing", edited.result === null && edited.flow.started === 0 && edited.store.get("signature") === "08:00|17:00");
+  const cleared = await run(2, { ...base, on: "", signature: "07:00|17:00" }, at(23, 18, 0));
+  note("schedule clearing one time keeps the other", cleared.store.get("signature") === "|17:00" && cleared.result === null);
+
+  const woke = await run(1, { ...base }, at(23, 8, 30));
+  note("schedule catches up after the computer slept through the start", woke.result === "started");
+  const sleptPastStop = await run(2, { ...base, applied: "2026-11-23@07:00:on" }, at(23, 18, 30));
+  note("schedule catches up after the computer slept through the stop", sleptPastStop.result === "stopped");
+
+  const refusedEnv = makeContext(1, { ...base });
+  refusedEnv.flow.refuseStart = true;
+  win.mainAPI.notes.length = 0;
+  const refusedResult = await api.dgScheduleTick(refusedEnv.ctx, at(23, 7, 0));
+  note("schedule reports a start that did not take effect without announcing it", refusedResult === "failed" && win.mainAPI.notes.length === 0 && refusedEnv.store.get("applied") === "2026-11-23@07:00:on");
+
+  const malformed = await run(2, { on: "nope", off: "99:99", signature: "|", applied: "" }, at(23, 18, 0));
+  note("schedule treats malformed stored times as unset", malformed.result === null && malformed.flow.stopped === 0);
+
+  const loaded = loadSchedule();
+  let reads = 0;
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const gated = {
+    workflow: { state: 1 },
+    varsRepository: { getValue: async () => { reads += 1; await gate; return ""; }, setValue: async () => {} },
+  };
+  loaded.api.dgScheduleStart(gated);
+  const runCheck = loaded.timers.intervals[0][0];
+  runCheck();
+  runCheck();
+  runCheck();
+  const during = reads;
+  release();
+  note("schedule overlapping checks collapse into one", during === 1);
+  note("schedule checks twice a minute after a short delay", loaded.timers.intervals.length === 1 && loaded.timers.intervals[0][1] === 3e4 && loaded.timers.timeouts.length === 1 && loaded.timers.timeouts[0][1] === 5e3);
+
+  const errors = [];
+  const failing = loadSchedule({ console: { error: (...args) => errors.push(args) } });
+  failing.api.dgScheduleStart({ workflow: { state: 1 }, varsRepository: { getValue: async () => { throw new Error("db down"); }, setValue: async () => {} } });
+  const failRun = failing.timers.intervals[0][0];
+  failRun();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  failRun();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  note("schedule survives a failing store and keeps checking", errors.length === 2);
+
+  return checks;
+};
+
+const scheduleUiChecks = () => {
+  const open = "{section:`Schedule`},{render:";
+  const from = jsSrc.indexOf(open);
+  const to = from < 0 ? -1 : jsSrc.indexOf("}}];return(", from);
+  if (from < 0 || to < 0) return [["schedule ui snippet present", false]];
+  const snippet = jsSrc.slice(from + open.length, to + 1);
+  const kName = /([A-Za-z_$][\w$]*)\.SCHEDULE_ON_TIME/.exec(snippet);
+  const noName = /className:([A-Za-z_$][\w$]*)\.scope\b/.exec(snippet);
+  const vaName = /className:([A-Za-z_$][\w$]*)\(([A-Za-z_$][\w$]*)\.monitorRow/.exec(snippet);
+  if (!kName || !noName || !vaName) return [["schedule ui snippet resolvable", false]];
+
+  const { api } = loadSchedule();
+  const make = (type, props, key) => ({ type, props, key });
+  const W = { jsx: make, jsxs: make };
+  const proxy = () => new Proxy({}, { get: (_, prop) => String(prop) });
+  const classes = (...args) => args.map((a) => (typeof a === "string" ? a : Object.keys(a).filter((k) => a[k]).join(" "))).join(" ");
+  const unique = [...new Set([kName[1], noName[1], vaName[1], "W", "t", "schedOn", "schedOff", "dgScheduleLabel"])];
+  const build = (schedOn, schedOff) => {
+    const calls = [];
+    const values = { [kName[1]]: proxy(), [noName[1]]: proxy(), [vaName[1]]: classes, W, t: (key, value) => calls.push([key, value]), schedOn, schedOff, dgScheduleLabel: api.dgScheduleLabel };
+    const render = new Function(...unique, "return (" + snippet + ")").apply(null, unique.map((name) => values[name]));
+    return { tree: render(), calls };
+  };
+  const walk = (node, out = []) => {
+    if (node === null || node === undefined || typeof node === "string") return out;
+    if (Array.isArray(node)) { node.forEach((child) => walk(child, out)); return out; }
+    out.push(node);
+    walk(node.props && node.props.children, out);
+    return out;
+  };
+  const textOf = (node) => walk(node).map((n) => (n.props && typeof n.props.children === "string" ? n.props.children : "")).join(" ");
+  const inputs = (tree, type) => walk(tree).filter((n) => n.type === "input" && n.props.type === type);
+  const toggled = (schedOn, schedOff, index, checked) => {
+    const view = build(schedOn, schedOff);
+    inputs(view.tree, "checkbox")[index].props.onChange({ target: { checked } });
+    return view.calls;
+  };
+
+  const empty = build("", "");
+  const emptyChecks = inputs(empty.tree, "checkbox");
+  const emptyTimes = inputs(empty.tree, "time");
+  const set = build("07:00", "17:00");
+  const setChecks = inputs(set.tree, "checkbox");
+  const setTimes = inputs(set.tree, "time");
+  const onlyOff = build("", "17:00");
+  const same = build("09:00", "09:00");
+  const startOn = toggled("", "", 0, true);
+  const stopOn = toggled("", "", 1, true);
+  const startOff = toggled("07:00", "17:00", 0, false);
+  setTimes[1].props.onChange({ target: { value: "18:30" } });
+  setTimes[1].props.onChange({ target: { value: "" } });
+
+  return [
+    ["schedule ui shows a start and a stop row", emptyChecks.length === 2 && emptyTimes.length === 2],
+    ["schedule ui starts unchecked with disabled time fields", emptyChecks.every((c) => c.props.checked === false) && emptyTimes.every((t) => t.props.disabled === true)],
+    ["schedule ui explains an empty schedule", /No schedule/.test(textOf(empty.tree))],
+    ["schedule ui checking the start row stores a default time", startOn.length === 1 && startOn[0][1] === "09:00" && /SCHEDULE_ON_TIME/.test(startOn[0][0])],
+    ["schedule ui checking the stop row stores a default time", stopOn.length === 1 && stopOn[0][1] === "17:00" && /SCHEDULE_OFF_TIME/.test(stopOn[0][0])],
+    ["schedule ui unchecking clears the time", startOff.length === 1 && startOff[0][1] === "" && /SCHEDULE_ON_TIME/.test(startOff[0][0])],
+    ["schedule ui saves an edited time and ignores a half typed one", set.calls.length === 1 && set.calls[0][1] === "18:30" && /SCHEDULE_OFF_TIME/.test(set.calls[0][0])],
+    ["schedule ui shows both set rows enabled", setChecks.every((c) => c.props.checked === true) && setTimes.every((t) => t.props.disabled === false) && setTimes[0].props.defaultValue === "07:00" && setTimes[1].props.defaultValue === "17:00"],
+    ["schedule ui describes a start and stop pair", /Starts at .* and stops at /.test(textOf(set.tree))],
+    ["schedule ui describes a stop only schedule", /Stops at .* every day\. You start it yourself\./.test(textOf(onlyOff.tree))],
+    ["schedule ui says so when both times match", /Both times are the same/.test(textOf(same.tree))],
+    ["schedule ui remounts a time field when it is switched on or off", emptyTimes[0].key === "off" && setTimes[0].key === "on"],
+    ["schedule ui labels the time fields for assistive tech", setTimes.every((t) => typeof t.props["aria-label"] === "string" && t.props["aria-label"].length > 0)],
+  ];
+};
+
 const run = async () => {
   const checks = [...syntaxChecks, ...staticChecks];
   try {
@@ -697,6 +949,20 @@ const run = async () => {
   } catch (error) {
     console.log("FAIL display name harness: " + error.message);
     checks.push(["display name harness executed", false]);
+  }
+
+  try {
+    checks.push(...(await scheduleChecks()));
+  } catch (error) {
+    console.log("FAIL schedule harness: " + error.message);
+    checks.push(["schedule harness executed", false]);
+  }
+
+  try {
+    checks.push(...scheduleUiChecks());
+  } catch (error) {
+    console.log("FAIL schedule ui harness: " + error.message);
+    checks.push(["schedule ui harness executed", false]);
   }
 
   let bad = 0;
