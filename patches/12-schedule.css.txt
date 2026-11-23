@@ -1,0 +1,5 @@
+
+._scheduleToggle_o11y_18{display:flex;align-items:center;gap:9px;flex:1;min-width:0;cursor:pointer}
+._timeInput_o11y_19{appearance:none;font:inherit;font-size:13px;font-variant-numeric:tabular-nums;color:var(--color-text);background:transparent;border:1px solid color-mix(in srgb,var(--color-text) 28%,transparent);border-radius:6px;padding:4px 8px;color-scheme:light dark}
+._timeInput_o11y_19:focus-visible{outline:2px solid var(--color-primary);outline-offset:1px}
+._timeInput_o11y_19:disabled{opacity:.45;cursor:not-allowed}

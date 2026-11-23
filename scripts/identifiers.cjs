@@ -18,6 +18,7 @@ const PATTERNS = {
   shotEvent: /new CustomEvent\(([A-Za-z_$][\w$]*)\.ScreenshotTaken,/,
 
   tray: /\{label:`((?:Minimize button minimizes|Hide) [\w.]+ (?:to tray|from dock))`,checked:i,onChange:m,/,
+  WC: /var ([A-Za-z_$][\w$]*)=`releaseData`,/,
   APP: /\{label:`Launch ([\w.]+) on system startup`/,
 };
 
